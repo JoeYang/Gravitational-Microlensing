@@ -1,4 +1,5 @@
 // List of headers common across all files
-#include <stdlib.h>
-#include <stdio.h>
+#include <assert.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>

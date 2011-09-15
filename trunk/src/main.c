@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-
+#include "global.h"
 #include "constants.h"
 #include "util.h"
 
@@ -50,6 +47,9 @@ void read_lenses(const char *filename) {
   // Deallocate memory used by line
   free(line);
 }
+
+/* get_pixel • Return the correct pixel in the output map */
+// TODO
 
 /* deflect • Deflect a given light ray according to the gravitational bodies along its path */
 void deflect(float *x, float *y) {
@@ -105,8 +105,29 @@ int main(int argc, const char *argv[])
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
   int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
-  int highest = 0;
   if (!results) error("calloc failed in allocating the result array");
+  int highest = 0;
+  int show_lenses = 0;
+
+  // Place the gravitational objects in their relative positions
+  if (show_lenses) {
+    for(it = 0; it < nobjects; ++it) {
+      dx = lens_x[it];
+      dy = lens_y[it];
+      if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+          (dy >= -source_scale/2) && (dy <= source_scale/2)) {
+        // Work out the nearest pixel to put this in to
+        //result[py * pixel_x + px]
+        // Add to remove the negative part of source_scale and then source_scale / pixels
+        int px = (dx + source_scale/2) / (source_scale/pixel_x);
+        int py = (dy + source_scale/2) / (source_scale/pixel_y);
+        results[py * pixel_x + px] += 1;
+        if (results[py * pixel_x + px] > highest) highest = results[py * pixel_x + px];
+      }
+    }
+  }
+
+  // Fire off the light rays and record their end locations
   for(it = 0; it < 1; ++it) {
     for(y = -image_scale_y; y < image_scale_y; y += increment_y) {
       for(x = -image_scale_x; x < image_scale_x; x += increment_x) {
@@ -135,7 +156,14 @@ int main(int argc, const char *argv[])
   }
   fprintf(stderr, "\n");
 
+  assert(highest > 0 && "No pixels were written on the output map");
   write_pgm(results, pixel_x, pixel_y, highest);
+
+  // Free the memory allocated during processing
+  free(lens_x);
+  free(lens_y);
+  free(lens_mass);
+  free(results);
 
   return 0;
 }
