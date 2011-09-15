@@ -4,13 +4,27 @@
 #include <cuda.h>
 
 #include "utils.h"
-#include "constants.h"
 
 #define BLOCK_SIZE	16
 #define PIXEL_SIZE	512
 
+#define kappa_star (0.394f)      // convergence in stars (sometimes written as sigma instead of kappa)
+#define kappa_c (0.f)            // convergence in smooth matter
+#define gamma_ (0.f)              // shear
+#define kappa (kappa_star + kappa_c) // total convergence
+#define source_scale (24.f)       //
+#define image_scale_fudge 0.1  
+#define lens_scale_fudge_1 (5.0f) // lens plane scale fudge factor 1
+#define lens_scale_fudge_2 (2.0f) // lens plane scale fudge factor 2
 
-#define  
+#define image_scale_x (0.5 + 2.0*image_scale_fudge) * source_scale / (1.0 - kappa - gamma_)
+#define image_scale_y (0.5 + 2.0*image_scale_fudge) * source_scale / (1.0 - kappa + gamma_)  
+
+float lens_rad_x = ((0.5*source_scale + lens_scale_fudge_1) / (1.0 - kappa + gamma_));
+float lens_rad_y = ((0.5*source_scale + lens_scale_fudge_1) / (1.0 - kappa - gamma_));
+float lens_rad = (sqrt(lens_rad_x*lens_rad_x + lens_rad_y*lens_rad_y) + lens_scale_fudge_2);
+ 
+float lens_count = ((size_t)(kappa_star * lens_rad*lens_rad / 1 + 0.5));
 
 float *lens_x;
 float *lens_y;
@@ -58,7 +72,7 @@ void read_lenses(const char *filename) {
   free(line);
 } 
 
-int highest(int *result, int size){
+int highest(int *results, int size){
 	int i = 0, highest_count=0;
 	for(; i<size; ++i){
 		if (results[i] > highest_count) 
@@ -89,15 +103,33 @@ void write_pgm(int *results, int pixel_x, int pixel_y, int highest) {
 }
 
 
-__global__ void kernel(const float *lens_x, const float *lens_y, int* result, const int iter){
+__global__ void kernel(const float *lens_x, const float *lens_y, int* result, const int iter, const float offset, const int size){
   	const int x = blockIdx.x; 
   	const int y = iter;
   	const int i = threadIdx.x;
   	const int j = threadIdx.y;
   	int dx = x, dy = y;
+  	float start_x, start_y;
+  	
+  	start_x = threadIdx.x*offset + blockIdx.x*2*image_scale_x/PIXEL_SIZE; 
+  	start_y = threadIdx.y*offset + iter*2*image_scale_y/PIXEL_SIZE;
   	
   	/* deflection calculation*/
-  
+  	size_t c;
+  	float dist;
+
+	start_x -= gamma_;
+	start_y += gamma_;
+	start_x -= kappa_c * start_x;
+	start_y -= kappa_c * start_y;
+	for(c = 0; c < size; ++c) {
+    	dist = sqrt(pow(start_x - lens_x[c], 2) + pow(start_y - lens_y[c], 2));
+    	start_x -= (start_x - lens_x[c]) / dist;
+    	start_y -= (start_y - lens_y[c]) / dist;
+  	}
+          
+	dx = (start_x + source_scale/2) / (source_scale/PIXEL_SIZE);
+	dy = (start_y + source_scale/2) / (source_scale/PIXEL_SIZE);  
   	
   	/*finish calculation*/
   	
@@ -108,11 +140,11 @@ __global__ void kernel(const float *lens_x, const float *lens_y, int* result, co
 int main(int argc, char** argv)
 {
 	float x, y, dx, dy, increment_x, increment_y;
-	int pixel_x = 512, pixel_y = 512, it;
+	int pixel_x = 512, pixel_y = 512;
 	
 	// Load relevant settings and data
 	if (argc < 2) error("Requires argument with lens positions and optional mass");
-	setup_constants();
+	//setup_constants();
 	read_lenses(argv[1]);
 	fprintf(stderr, "X %f and Y %f\n", image_scale_x, image_scale_y);
 	increment_x = (image_scale_x * 2) / (pixel_x*10);
@@ -136,8 +168,8 @@ int main(int argc, char** argv)
   	dim3 dimb(BLOCK_SIZE, BLOCK_SIZE);
   	dim3 dimg(PIXEL_SIZE);
   	
-  	for(int i=0; i<=PIXEL_SIZE; ++i){
-  		kernel<<<dimg, dimb>>>(d_lens_x, d_lens_y, d_results, i);
+  	for(int i=0; i<PIXEL_SIZE; ++i){
+  		kernel<<<dimg, dimb>>>(d_lens_x, d_lens_y, d_results, i, increment_x, nobjects);
   		fprintf(stderr, "\r%1.0f%% ", 100*i*1.0/PIXEL_SIZE);
   	}	
   	
