@@ -123,7 +123,7 @@ __global__ void kernel(const float *lens_x, const float *lens_y, int* result, co
 	start_x -= kappa_c * start_x;
 	start_y -= kappa_c * start_y;
 	for(c = 0; c < size; ++c) {
-    	dist = sqrt(pow(start_x - lens_x[c], 2) + pow(start_y - lens_y[c], 2));
+    	dist = pow(start_x - lens_x[c], 2) + pow(start_y - lens_y[c], 2);
     	start_x -= (start_x - lens_x[c]) / dist;
     	start_y -= (start_y - lens_y[c]) / dist;
   	}

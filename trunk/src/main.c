@@ -62,9 +62,11 @@ void deflect(float *x, float *y) {
   *x -= kappa_c * start_x;
   *y -= kappa_c * start_y;
   for(i = 0; i < nobjects; ++i) {
-    dist = sqrt(pow(start_x - lens_x[i], 2) + pow(start_y - lens_y[i], 2));
-    *x -= lens_mass[i] * (start_x - lens_x[i]) / dist;
-    *y -= lens_mass[i] * (start_y - lens_y[i]) / dist;
+    dist = pow(start_x - lens_x[i], 2) + pow(start_y - lens_y[i], 2);
+    //*x -= lens_mass[i] * (start_x - lens_x[i]) / dist;
+    *x -= (start_x - lens_x[i]) / dist;
+    //*y -= lens_mass[i] * (start_y - lens_y[i]) / dist;
+    *y -= (start_y - lens_y[i]) / dist;
   }
 }
 
