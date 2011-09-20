@@ -57,8 +57,8 @@ void deflect(float *x, float *y) {
   float dist;
   // Start X / Y
   float start_x = *x, start_y = *y;
-  *x -= gamma_;
-  *y += gamma_;
+  *x *= (1-gamma_);
+  *y *= (1+gamma_);
   *x -= kappa_c * start_x;
   *y -= kappa_c * start_y;
   for(i = 0; i < nobjects; ++i) {
