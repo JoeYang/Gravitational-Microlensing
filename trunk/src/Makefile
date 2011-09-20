@@ -1,4 +1,4 @@
-CFLAGS = -O3 -g -lm
+CFLAGS = -O3 -g -lm -fopenmp
 SRC = main.c util.c util.h constants.c constants.h
 CC = gcc
 

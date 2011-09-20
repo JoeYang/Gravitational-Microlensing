@@ -63,10 +63,8 @@ void deflect(float *x, float *y) {
   *y -= kappa_c * start_y;
   for(i = 0; i < nobjects; ++i) {
     dist = pow(start_x - lens_x[i], 2) + pow(start_y - lens_y[i], 2);
-    //*x -= lens_mass[i] * (start_x - lens_x[i]) / dist;
-    *x -= (start_x - lens_x[i]) / dist;
-    //*y -= lens_mass[i] * (start_y - lens_y[i]) / dist;
-    *y -= (start_y - lens_y[i]) / dist;
+    *x -= lens_mass[i] * (start_x - lens_x[i]) / dist;
+    *y -= lens_mass[i] * (start_y - lens_y[i]) / dist;
   }
 }
 
@@ -130,14 +128,16 @@ int main(int argc, const char *argv[])
   }
 
   // Fire off the light rays and record their end locations
-  for(it = 0; it < 1; ++it) {
+  #pragma omp parallel for
+  for(it = 0; it < 50; ++it) {
+    fprintf(stderr, "\nIteration Number %d Begun\n", it);
     for(y = -image_scale_y; y < image_scale_y; y += increment_y) {
       for(x = -image_scale_x; x < image_scale_x; x += increment_x) {
         // Noise should be up to one increment
-        //float noise = (((float)rand())/RAND_MAX * increment_x) - (increment_x/2);
-        dx = x;
-        //noise = (((float)rand())/RAND_MAX * increment_y) - (increment_y/2);
-        dy = y;
+        float noise = (((float)rand())/RAND_MAX * increment_x) - (increment_x/2);
+        dx = x + noise;
+        noise = (((float)rand())/RAND_MAX * increment_y) - (increment_y/2);
+        dy = y + noise;
         deflect(&dx, &dy);
         // Source plan (where collected) is -source_scale/2 to source_scale/2
         if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
@@ -154,7 +154,7 @@ int main(int argc, const char *argv[])
       // Provide an update counter in percent for our current progress
       fprintf(stderr, "\r%1.0f%% ", 100*(y+image_scale_y)/(image_scale_y*2));
     }
-    fprintf(stderr, "\nIteration Number %d\n", it);
+    fprintf(stderr, "\nIteration Number %d Complete\n", it);
   }
   fprintf(stderr, "\n");
 
