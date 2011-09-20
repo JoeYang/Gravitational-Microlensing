@@ -152,11 +152,11 @@ int main(int argc, const char *argv[])
         }
       }
       // Provide an update counter in percent for our current progress
-      fprintf(stderr, "\r%1.0f%% ", 100*(y+image_scale_y)/(image_scale_y*2));
+      // This doesn't play well with OpenMP for loops
+      //fprintf(stderr, "\r%1.0f%% ", 100*(y+image_scale_y)/(image_scale_y*2));
     }
-    fprintf(stderr, "\nIteration Number %d Complete\n", it);
+    fprintf(stderr, "Iteration Number %d Complete\n", it);
   }
-  fprintf(stderr, "\n");
 
   assert(highest > 0 && "No pixels were written on the output map");
   write_pgm(results, pixel_x, pixel_y, highest);
