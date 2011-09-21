@@ -1,23 +1,25 @@
 #include "utils.h"
 #include "global.h"
 #include "constants.h"
+#include <assert.h>
+#include <stdio.h>
 
 #define BLOCK_SIZE	(16)
-#define GRID_SIZE	(16)
+#define GRID_SIZE	(256)
 #define PIXEL_SIZE	(512)
 #define show_lenses (1)
 
 float *lens_x;
 float *lens_y;
 float *lens_mass;
-size_t nobjects;
+int nobjects;
 
 /*device lens_x and lens_y*/
 float *d_lens_x;
 float *d_lens_y;
 
 void read_lenses(const char *filename) {
-  size_t i, len = 0;
+  size_t i;
   char c, *line = NULL;
   FILE *fp;
 
@@ -53,11 +55,13 @@ void read_lenses(const char *filename) {
 void write_pgm(int *results, int pixel_x, int pixel_y, int highest) {
   FILE *fout;
   fprintf(stderr, "Writing resulting image...\n");
-  if (!(fout = fopen("img.pgm", "w"))) error("Can't open results file...");
+  if (!(fout = fopen("img.pgm", "w"))) 
+  	error("Can't open results file...");
   // Writing the PGM format which starts with P2
   fprintf(fout, "P2\n");
-  // Followed by pixel width, height and the value considered white
+  // Followed by pixel width, height and the value considered white 
   fprintf(fout, "%d %d\n", pixel_x, pixel_y);
+  
   fprintf(fout, "%d\n", highest);
   // Print each value in a row of WIDTH length
   int px, py;
@@ -79,21 +83,24 @@ int highest(int *results, int size){
 	return highest_count;
 }
 
-__global__ void lens_position(const float *lens_x, const float *lens_y, int* results, vars* variables, int pixel_x, int pixel_y){
-	const int x = threadIdx.x + blockIdx.x*blockDim.x;
-  	const int y = threadIdx.y + blockIdx.y*blockDim.y;
-  	const int i = y*BLOCK_SIZE*GRID_SIZE + x;
-	const float dx = lens_x[i];
-   	const float dy = lens_y[i];
-   	float source_scale = variables->source_scale;
-   	
-  	if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
-        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
-   	 	int px = (dx + source_scale/2) / (source_scale/pixel_x);
-      	int py = (dy + source_scale/2) / (source_scale/pixel_y);
-      	results[py * pixel_x + px] += 1;
-  	}   
+__global__ void lens_position(const float *lens_x, const float *lens_y, int* results, vars* variables){
+	const int column = threadIdx.x + blockIdx.x*blockDim.x;
+  	const int row = threadIdx.y + blockIdx.y*blockDim.y;
+  	const int i = row*BLOCK_SIZE*GRID_SIZE + column;
+	const float source_scale = 24.;
+	const int size = 2196;
+	if(i<size){	
+		float dx = lens_x[i];
+	   	float dy = lens_y[i];
+		if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+	 		(dy >= -source_scale/2) && (dy <= source_scale/2)) {  	  	
+				int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
+		 		int py = (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
+		 		results[py * PIXEL_SIZE + px]++;
+		 	}
+	}	   
 }
+
 
 int main(int argc, char** argv)
 {
@@ -112,28 +119,31 @@ int main(int argc, char** argv)
 	int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
 	int *d_results;
 	if (!results) error("calloc failed in allocating the result array");
-	int highest_c = 0;
 	
-	// Fire off the light rays and record their end locations
+	
+	// cuda global memories
+	vars *d_variables;
  	cudaMalloc(&d_lens_x, sizeof(float) * nobjects);
  	cudaMalloc(&d_lens_y, sizeof(float) * nobjects);
  	cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));
+ 	cudaMalloc(&d_variables, sizeof(vars));
  	
  	cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));	
+  	cudaMemcpy(d_variables, variables, sizeof(vars), cudaMemcpyHostToDevice);
   	cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
   	cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
       
   	dim3 dimb(BLOCK_SIZE, BLOCK_SIZE);
-  	dim3 dimg_(GRID_SIZE, GRID_SIZE);
+  	dim3 dimt(GRID_SIZE, GRID_SIZE);
   	dim3 dimg(PIXEL_SIZE);
   	
   	//kernel	
   	// Place the gravitational objects in their relative positions
 	if (show_lenses) {
-		printf("oh yeah!\n");
-	  	lens_position<<<dimg_, dimb>>>(d_lens_x, d_lens_y, d_results, variables, pixel_x, pixel_y);
+	  	lens_position<<<dimt, dimb>>>(d_lens_x, d_lens_y, d_results, d_variables);
+	  	cudaThreadSynchronize();
 	}
-  	
+	  	
   	cudaMemcpy(results, d_results,PIXEL_SIZE*PIXEL_SIZE*sizeof(float), cudaMemcpyDeviceToHost);
 
   	cudaFree(d_lens_x);
@@ -141,8 +151,10 @@ int main(int argc, char** argv)
 	cudaFree(d_results);
 	
 		
-	highest_c = highest(results, pixel_x*pixel_y);
-	assert(highest_c > 0 && "No pixels were written on the output map");
+	int highest_c = highest(results, pixel_x * pixel_y);
+  	
+	printf("the highest pixel count is %d\n", highest_c);
+	
 	write_pgm(results, pixel_x, pixel_y, highest_c);
 	
 	// Free the memory allocated during processing

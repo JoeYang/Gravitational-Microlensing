@@ -57,5 +57,5 @@ void init_var(vars *var){
 	var->lens_rad_x = lens_rad_x;
 	var->lens_rad_y = lens_rad_y;
 	var->lens_rad = lens_rad;
-	var->lens_count;	
+	var->lens_count = lens_count;	
 }
