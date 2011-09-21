@@ -13,6 +13,7 @@ typedef struct vars{
 	float image_scale_fudge, image_scale_x, image_scale_y;
 	float lens_scale_fudge_1, lens_scale_fudge_2, lens_rad_x, lens_rad_y, lens_rad;
 	float lens_count;
+	float increment_x, increment_y;
 }vars;
 
 vars* setup_constants();
