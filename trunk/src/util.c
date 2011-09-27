@@ -47,9 +47,9 @@ void read_lenses(const char *filename) {
   lens_mass = (float *)salloc(sizeof(float) * nobjects);
 
   for(i = 0; i < nobjects; ++i) {
- 	if(fscanf(fp, "%f %f", &lens_x[i], &lens_y[i])!=2)
-    	error("invalid input!");
-    lens_mass[i] = 1;	
+    if(fscanf(fp, "%f %f", &lens_x[i], &lens_y[i])!=2)
+      error("invalid input!");
+    lens_mass[i] = 1;
   }
 
   if (fclose(fp) != 0) error("Can't close lens file...");
