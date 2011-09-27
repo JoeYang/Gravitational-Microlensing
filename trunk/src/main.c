@@ -84,8 +84,9 @@ void write_pgm(int *results, int pixel_x, int pixel_y, int highest) {
 
 int main(int argc, const char *argv[])
 {
-  float x, y, dx, dy, increment_x, increment_y;
+  float increment_x, increment_y;
   int pixel_x = 512, pixel_y = 512, it;
+  unsigned int rpp = 500;
 
   // Load relevant settings and data
   if (argc < 2) error("Requires argument with lens positions and optional mass");
@@ -100,43 +101,24 @@ int main(int argc, const char *argv[])
   int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
   if (!results) error("calloc failed in allocating the result array");
   int highest = 0;
-  int show_lenses = 0;
 
-  // Place the gravitational objects in their relative positions
-  if (show_lenses) {
-    for(it = 0; it < nobjects; ++it) {
-      dx = lens_x[it];
-      dy = lens_y[it];
-      if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
-          (dy >= -source_scale/2) && (dy <= source_scale/2)) {
-        // Work out the nearest pixel to put this in to
-        //result[py * pixel_x + px]
-        // Add to remove the negative part of source_scale and then source_scale / pixels
-        int px = (dx + source_scale/2) / (source_scale/pixel_x);
-        int py = (dy + source_scale/2) / (source_scale/pixel_y);
-        results[py * pixel_x + px] += 1;
-        if (results[py * pixel_x + px] > highest) highest = results[py * pixel_x + px];
-      }
-    }
-  }
-else{
   // Fire off the light rays and record their end locations
+  int complete_iterations = 0;
   #pragma omp parallel for
-  for(it = 0; it < 200; ++it) {
-    fprintf(stderr, "\nIteration Number %d Begun\n", it);
+  for(it = 0; it < rpp; ++it) {
+    float x, y, dx, dy;
     for(y = -image_scale_y; y < image_scale_y; y += increment_y) {
       for(x = -image_scale_x; x < image_scale_x; x += increment_x) {
-        // Noise should be up to one increment
-        float noise = (((float)rand())/RAND_MAX * increment_x) - (increment_x/2);
-        dx = x + noise;
-        noise = (((float)rand())/RAND_MAX * increment_y) - (increment_y/2);
-        dy = y + noise;
+        // Noise is uniformly distributed -- i.e. it's not really noise
+        float noise_x = it * increment_x / rpp;
+        float noise_y = it * increment_y / rpp;
+        dx = x + noise_x;
+        dy = y + noise_y;
         deflect(&dx, &dy);
         // Source plan (where collected) is -source_scale/2 to source_scale/2
-        if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
-            (dy >= -source_scale/2) && (dy <= source_scale/2)) {
+        if ((dx > -source_scale/2) && (dx < source_scale/2) &&
+            (dy > -source_scale/2) && (dy < source_scale/2)) {
           // Work out the nearest pixel to put this in to
-          //result[py * pixel_x + px]
           // Add to remove the negative part of source_scale and then source_scale / pixels
           int px = (dx + source_scale/2) / (source_scale/pixel_x);
           int py = source_scale/ (source_scale/pixel_y) - (dy + source_scale/2) / (source_scale/pixel_y);
@@ -144,13 +126,9 @@ else{
           if (results[py * pixel_x + px] > highest) highest = results[py * pixel_x + px];
         }
       }
-      // Provide an update counter in percent for our current progress
-      // This doesn't play well with OpenMP for loops
-      //fprintf(stderr, "\r%1.0f%% ", 100*(y+image_scale_y)/(image_scale_y*2));
     }
-    fprintf(stderr, "Iteration Number %d Complete\n", it);
+    fprintf(stderr, "\r%4d/%4d Complete\r", ++complete_iterations, rpp);
   }
-}
   assert(highest > 0 && "No pixels were written on the output map");
   write_pgm(results, pixel_x, pixel_y, highest);
 
