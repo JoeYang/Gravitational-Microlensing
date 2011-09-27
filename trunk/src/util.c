@@ -22,3 +22,57 @@ void nextline(FILE *input, char **buf, size_t *len) {
     error("getline has returned an error");
   }
 }
+
+/* read_lenses • Loads a lens file of format {x, y, (optional)mass} and allocate the correct sized array for the attributes */
+void read_lenses(const char *filename) {
+  size_t i, len = 0;
+  char c, *tmp, *line = NULL;
+  FILE *fp;
+
+  fprintf(stderr, "Reading in lenses...\n");
+  if (!(fp = fopen(filename, "r"))) error("Can't open lens file...");
+
+  nobjects = 0;
+  // Count the number of lenses we must allocate for (one per line)
+  while ((c = getc(fp)) != EOF) {
+    if (c == '\n') ++nobjects;
+  }
+  fprintf(stderr, "Total lenses found: %d\n", nobjects);
+  // Seek to the start of the file for actual reading
+  fseek(fp, 0, SEEK_SET);
+
+  // Allocate memory for the lenses
+  lens_x = (float *)salloc(sizeof(float) * nobjects);
+  lens_y = (float *)salloc(sizeof(float) * nobjects);
+  lens_mass = (float *)salloc(sizeof(float) * nobjects);
+
+  for(i = 0; i < nobjects; ++i) {
+ 	if(fscanf(fp, "%f %f", &lens_x[i], &lens_y[i])!=2)
+    	error("invalid input!");
+    lens_mass[i] = 1;	
+  }
+
+  if (fclose(fp) != 0) error("Can't close lens file...");
+  // Deallocate memory used by line
+  free(line);
+}
+
+/* write_pgm • Output the results as a PGM (portable gray map) image for review */
+void write_pgm(int *results, int pixel_x, int pixel_y, int highest) {
+  FILE *fout;
+  fprintf(stderr, "Writing resulting image...\n");
+  if (!(fout = fopen("img.pgm", "w"))) error("Can't open results file...");
+  // Writing the PGM format which starts with P2
+  fprintf(fout, "P2\n");
+  // Followed by pixel width, height and the value considered white
+  fprintf(fout, "%d %d\n", pixel_x, pixel_y);
+  fprintf(fout, "%d\n", highest);
+  // Print each value in a row of WIDTH length
+  int px, py;
+  for(py = 0; py < pixel_y; ++py) {
+    for(px = 0; px < pixel_x; ++px) {
+      fprintf(fout, "%d\n", results[py * pixel_x + px]);
+    }
+  }
+  if (fclose(fout) != 0) error("Can't close results file...");
+}
