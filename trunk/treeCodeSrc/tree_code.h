@@ -5,26 +5,27 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_INDEX 200
-
 /* data structure to store a lens' position and mass */
-typedef struct lens {
+typedef struct lens lens;
+typedef struct cell cell;
+
+struct lens {
 	float pos_x;
 	float pos_y;
 	float mass;
-} lens;
+};
 
 /* data structure to store information about a cell */
-typedef struct cell {
+struct cell {
 	int index; // position where cell is stored in array, 'cells'
 	float top_left[2], bottom_right[2]; // x, y co-ordinates that define the dimensions of the cell
 	float cm_x; // centre of mass, x
 	float cm_y; // centre of mass, y
 	float mass; // total mass the cell's lenses
-	int subcells[4]; // indexes of the subcells
+	cell *subcells[4]; // indexes of the subcells
 	lens clens; // lens inside the cell. If the lens has subcells this doesn't exist.
 	/* float quadrupole_moment; */
 	/* float higher_multipole_moment; */
-} cell;
+};
 
 #endif
