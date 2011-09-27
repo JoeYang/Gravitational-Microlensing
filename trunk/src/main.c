@@ -13,7 +13,7 @@ void read_lenses(const char *filename) {
   char c, *tmp, *line = NULL;
   FILE *fp;
 
-  fprintf(stderr, "Reading in lenses...\n");
+  fprintf(stderr, "Reading in xses...\n");
   if (!(fp = fopen(filename, "r"))) error("Can't open lens file...");
 
   nobjects = 0;
@@ -31,16 +31,9 @@ void read_lenses(const char *filename) {
   lens_mass = (float *)salloc(sizeof(float) * nobjects);
 
   for(i = 0; i < nobjects; ++i) {
-    // Read object definition
-    nextline(fp, &line, &len);
-    // Object x and y values are required
-    if ((tmp = (char *)strtok(line, " \n")) == NULL) error("Lens has no x");
-    lens_x[i] = atof(tmp);
-    if ((tmp = (char *)strtok(NULL, " \n")) == NULL) error("Lens has no y");
-    lens_y[i] = atof(tmp);
-    // Mass is optional
-    if ((tmp = (char *)strtok(NULL, " \n")) == NULL) lens_mass[i] = 1;
-    else lens_mass[i] = atof(tmp);
+ 	if(fscanf(fp, "%f %f", &lens_x[i], &lens_y[i])!=2)
+    	error("invalid input!");
+    lens_mass[i] = 1;	
   }
 
   if (fclose(fp) != 0) error("Can't close lens file...");
@@ -126,10 +119,10 @@ int main(int argc, const char *argv[])
       }
     }
   }
-
+else{
   // Fire off the light rays and record their end locations
   #pragma omp parallel for
-  for(it = 0; it < 50; ++it) {
+  for(it = 0; it < 200; ++it) {
     fprintf(stderr, "\nIteration Number %d Begun\n", it);
     for(y = -image_scale_y; y < image_scale_y; y += increment_y) {
       for(x = -image_scale_x; x < image_scale_x; x += increment_x) {
@@ -146,7 +139,7 @@ int main(int argc, const char *argv[])
           //result[py * pixel_x + px]
           // Add to remove the negative part of source_scale and then source_scale / pixels
           int px = (dx + source_scale/2) / (source_scale/pixel_x);
-          int py = (dy + source_scale/2) / (source_scale/pixel_y);
+          int py = source_scale/ (source_scale/pixel_y) - (dy + source_scale/2) / (source_scale/pixel_y);
           results[py * pixel_x + px] += 1;
           if (results[py * pixel_x + px] > highest) highest = results[py * pixel_x + px];
         }
@@ -157,7 +150,7 @@ int main(int argc, const char *argv[])
     }
     fprintf(stderr, "Iteration Number %d Complete\n", it);
   }
-
+}
   assert(highest > 0 && "No pixels were written on the output map");
   write_pgm(results, pixel_x, pixel_y, highest);
 

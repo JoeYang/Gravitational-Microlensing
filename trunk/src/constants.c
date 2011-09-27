@@ -9,13 +9,13 @@ void setup_constants(void) {
   /* Two parameters for the lensing system: convergence (kappa) and shear (gamma).
      Convergence can be broken into a smooth component (kappa_c) and a clumpy stellar
      component (kappa_star), such that kappa = kappa_star + kappa_c */
-  kappa_star = 0.394;           // convergence in stars (sometimes written as sigma instead of kappa)
+  kappa_star = 0.05;           // convergence in stars (sometimes written as sigma instead of kappa)
   kappa_c = 0.;                 // convergence in smooth matter
-  gamma_ = 0.395;                // shear
+  gamma_ = 0.05;                // shear
   kappa = kappa_star + kappa_c; // total convergence
   /* Source plane (where the light rays are collected) is a square with side length source_scale,
      measured in Einstein Radii. */
-  source_scale = 24.;       // size of the source plane in Einstein Radii
+  source_scale = 10.;       // size of the source plane in Einstein Radii
   /* Size of the image plane (from which the light rays are shot) depends on the desired size of the 
      source plane and the lensing parameters. Note that the image plane is rectangular -- 2d ray 
      positions should be randomly generated in the ranges [-image_scale_x, image_scale_x] and
@@ -25,6 +25,7 @@ void setup_constants(void) {
   image_scale_fudge = 0.1;  // image plane scale fudge factor
   image_scale_x = (0.5 + 2.0*image_scale_fudge) * source_scale / (1.0 - kappa - gamma_);
   image_scale_y = (0.5 + 2.0*image_scale_fudge) * source_scale / (1.0 - kappa + gamma_);
+ 
   /* Radius of the lens plane (where the microlenses are distributed) also depends on the desired size
      of the source plane and the lensing parameters. We use a circular lens plane of radius lens_rad.
      Some notes apply about the fudge factors. */
