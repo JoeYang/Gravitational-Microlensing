@@ -29,7 +29,7 @@ typedef struct vars {
 } vars;
 
 void init_var(vars *var) {
-  var->rpp = 500;
+  var->rpp = 32;
   var->kappa_c = kappa_c;
   var->gamma_ = gamma_;
   var->source_scale = source_scale;
@@ -39,8 +39,8 @@ void init_var(vars *var) {
   var->increment_y = 0;
 }
 
-int highest(unsigned int *results, int size) {
-  int i, highest_count = 0;
+int highest(unsigned int *results, unsigned int size) {
+  unsigned int i, highest_count = 0;
   for(i = 0; i < size; ++i){
     if (results[i] > highest_count)
       highest_count = results[i];
@@ -48,50 +48,50 @@ int highest(unsigned int *results, int size) {
   return highest_count;
 }
 
-__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, vars* v) {
+__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
   // Position of Block -- likely useful in tree calculations
-  //const int bx = blockIdx.x;
-  //const int by = blockIdx.y;
+  //const unsigned int bx = blockIdx.x;
+  //const unsigned int by = blockIdx.y;
   //
-  const unsigned int row = blockIdx.y*blockDim.y + threadIdx.y;
-  const unsigned int col = blockIdx.x*blockDim.x + threadIdx.x;
+  const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
+  const unsigned int col = blockIdx.y*blockDim.y + threadIdx.y;
+  
+  const float initial_x = (-v->image_scale_x) + row*v->increment_x;
+  const float initial_y = (-v->image_scale_y) + col*v->increment_y;
 
-  float start_x, start_y;
-  float noise_x = v->increment_x / v->rpp;
-  float noise_y = v->increment_y / v->rpp;
-  int dx, dy, it;
+  float start_x, start_y, dx, dy;
+  unsigned int it;
   size_t k;
   float dist;
 
   // TODO: Perform multiple ray calculations simultaneously
+  // BUG: A larger value (> 100) of rpp results in a completely blank image
   for(it = 0; it < v->rpp; ++it) {
-    start_x = (-v->image_scale_x) + row*v->increment_x;
-    start_x += it * noise_x;
-    start_y = (-v->image_scale_y) + col*v->increment_y;
-    start_y += it * noise_y;
-    dx = start_x;
-    dy = start_y;
+    start_x = initial_x + it * v->increment_x / v->rpp;
+    start_y = initial_y + it * v->increment_y / v->rpp;
 
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
-    dx = (1+v->gamma_)*start_y - v->kappa_c*start_y;
+    dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 
     for(k = 0; k < nobjects; ++k) {
       dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
-      start_x -= lens_mass[k] * (start_x - lens_x[k]) / dist;
-      start_y -= lens_mass[k] * (start_y - lens_y[k]) / dist;
+      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
     }
 
     const float source_scale = v->source_scale;
     if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
         (dy >= -source_scale/2) && (dy <= source_scale/2)) {
-      results[dy * PIXEL_SIZE + dx] += 1;
+      int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
+      int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
+      atomicAdd(&results[py * PIXEL_SIZE + px], 1);
+      //results[py * PIXEL_SIZE + px] += 1;
     }
   }
 }
 
 int main(int argc, char** argv) {
   float increment_x, increment_y;
-  int pixel_x = 512, pixel_y = 512;
   // Load relevant settings and data
   if (argc < 2) error("Requires argument with lens positions and optional mass");
   setup_constants();
@@ -100,13 +100,13 @@ int main(int argc, char** argv) {
   read_lenses(argv[1]);
 
   fprintf(stderr, "X %f and Y %f\n", image_scale_x, image_scale_y);
-  increment_x = (image_scale_x * 2) / pixel_x;
-  increment_y = (image_scale_y * 2) / pixel_y;
+  increment_x = (image_scale_x * 2) / PIXEL_SIZE;
+  increment_y = (image_scale_y * 2) / PIXEL_SIZE;
   variables->increment_x = increment_x;
   variables->increment_y = increment_y;
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
-  unsigned int *results = (unsigned int *)calloc(pixel_x * pixel_y, sizeof(unsigned int));
+  unsigned int *results = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
   unsigned int *d_results;
   if (!results) error("calloc failed in allocating the result array");
 
@@ -129,10 +129,10 @@ int main(int argc, char** argv) {
   dim3 bdim(TILE_SIZE, TILE_SIZE);
   dim3 gdim(GRID_SIZE, GRID_SIZE);
   glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
-  cudaMemcpy(results, d_results,PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(results, d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
-  int highest_c = highest(results, pixel_x * pixel_y);
-  write_pgm(results, pixel_x, pixel_y, highest_c);
+  int highest_c = highest(results, PIXEL_SIZE * PIXEL_SIZE);
+  write_pgm(results, PIXEL_SIZE, PIXEL_SIZE, highest_c);
 
   // Free the memory allocated during processing
   // GPU

@@ -1,9 +1,9 @@
 # GPGPU
 BINARY = gpgpu_glens
 
-PRODUCTION_CFLAGS =
+PRODUCTION_CFLAGS = -arch compute_11
 PRODUCTION_DIR = build
-DEVELOPMENT_CFLAGS = -g -G -deviceemu
+DEVELOPMENT_CFLAGS = -arch compute_11 -g -G -deviceemu
 DEVELOPMENT_DIR = debug
 
 # Set up the directories for CUDA on the GPU machines
