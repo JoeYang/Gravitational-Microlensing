@@ -7,10 +7,9 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 
-#define BLOCK_SIZE  (16)
-#define SIZE    (16)
-#define GRID_SIZE  (16)
-#define PIXEL_SIZE  (512)
+#define PIXEL_SIZE (512)
+#define TILE_SIZE (16)
+#define GRID_SIZE (PIXEL_SIZE/TILE_SIZE)
 
 float *lens_x;
 float *lens_y;
@@ -20,30 +19,22 @@ size_t nobjects;
 /* Pointers to the lens x,y co-ordinates on the GPU device */
 float *d_lens_x;
 float *d_lens_y;
+float *d_lens_mass;
 
 typedef struct vars {
-  float kappa_star, kappa_c, gamma_, kappa, source_scale;
-  float image_scale_fudge, image_scale_x, image_scale_y;
-  float lens_scale_fudge_1, lens_scale_fudge_2, lens_rad_x, lens_rad_y, lens_rad;
-  float lens_count;
+  unsigned int rpp;
+  float kappa_c, gamma_, source_scale;
+  float image_scale_x, image_scale_y;
   float increment_x, increment_y;
 } vars;
 
 void init_var(vars *var) {
-  var->kappa_star = kappa_star;
+  var->rpp = 500;
   var->kappa_c = kappa_c;
   var->gamma_ = gamma_;
-  var->kappa = kappa;
   var->source_scale = source_scale;
-  var->image_scale_fudge = image_scale_fudge;
   var->image_scale_x = image_scale_x;
   var->image_scale_y = image_scale_y;
-  var->lens_scale_fudge_1 = lens_scale_fudge_1;
-  var->lens_scale_fudge_2=lens_scale_fudge_2;
-  var->lens_rad_x = lens_rad_x;
-  var->lens_rad_y = lens_rad_y;
-  var->lens_rad = lens_rad;
-  var->lens_count = lens_count;
   var->increment_x = 0;
   var->increment_y = 0;
 }
@@ -57,57 +48,44 @@ int highest(int *results, int size) {
   return highest_count;
 }
 
-__global__ void glensing(const float *lens_x, const float *lens_y, int* results, int* row, vars* variables) {
-  // x and y are source positions (in pixel)
-  const int x = blockIdx.x;
-  const int y = *row;
-  // i and j are light ray position on the lensing plane
-  const int i = threadIdx.x;
-  const int j = threadIdx.y;
-  const float gamma_ = variables->gamma_;
-  const float kappa_c = variables->kappa_c;
-  const float image_scale_x = variables->image_scale_x;
-  const float image_scale_y = variables->image_scale_y;
-  const float source_scale = variables->source_scale;
-  const float pixel_length_x = 2*image_scale_x/PIXEL_SIZE;
-  const float pixel_length_y = 2*image_scale_y/PIXEL_SIZE;
-  const float ray_dist_x = pixel_length_x/(2*BLOCK_SIZE);
-  const float ray_dist_y = pixel_length_y/(2*BLOCK_SIZE);
-  // dx and dy are on observation plane positions(in pixel)
-  int dx = x, dy = y, iter;
+__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, int* results, vars* v) {
+  // Position of Block -- likely useful in tree calculations
+  const int bx = blockIdx.x;
+  const int by = blockIdx.y;
+  //
+  const unsigned int row = blockIdx.y*blockDim.y + threadIdx.y;
+  const unsigned int col = blockIdx.x*blockDim.x + threadIdx.x;
+
+  float start_x, start_y, noise_x, noise_y;
+  float noise_x = v->increment_x / v->rpp;
+  float noise_y = v->increment_y / v->rpp;
+  int dx, dy, iter;
   float dist;
-  int b;
-  for(b = 0; b < 4; b++){
-    float start_x = (-1*image_scale_x) + x*pixel_length_x + i*ray_dist_x*(b%2+1);
-    float start_y = (-1*image_scale_y) + y*pixel_length_y + j*ray_dist_y*(b/2+1);
 
-    start_x *= (1-gamma_);
-    start_y *= (1+gamma_);
-    start_x -= kappa_c * start_x;
-    start_y -= kappa_c * start_y;
+  // TODO: Perform multiple ray calculations simultaneously
+  for(it = 0; it < rpp; ++it) {
+    start_x = (-v->image_scale_x) + row*v->increment_x;
+    start_x += it * noise_x;
+    start_y = (-v->image_scale_y) + col*v->increment_y;
+    start_y += it * noise_y;
+    dx = start_x;
+    dy = start_y;
 
-    for(iter = 0; iter < 2196; ++iter) {
+    dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
+    dx = (1+v->gamma_)*start_y - v->kappa_c*start_y;
+
+    for(iter = 0; iter < nobjects; ++iter) {
       dist = pow(start_x - lens_x[iter], 2) + pow(start_y - lens_y[iter], 2);
-      start_x -= (start_x - lens_x[iter]) / dist;
-      start_y -= (start_y - lens_y[iter]) / dist;
+      start_x -= lens_mass[iter] * (start_x - lens_x[iter]) / dist;
+      start_y -= lens_mass[iter] * (start_y - lens_y[iter]) / dist;
     }
 
-    if ((start_x >= -source_scale/2) && (start_x <= source_scale/2) &&
-        (start_y >= -source_scale/2) && (start_y <= source_scale/2)) {
-      dx = (start_x + source_scale/2) / (source_scale/PIXEL_SIZE);
-      dy = (start_y + source_scale/2) / (source_scale/PIXEL_SIZE);
+    const float source_scale = variables->source_scale;
+    if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
       results[dy * PIXEL_SIZE + dx] += 1;
     }
   }
-}
-
-int* init_row() {
-  int *rows = (int*)malloc(PIXEL_SIZE*sizeof(int));
-  int i;
-  for(i=0; i<PIXEL_SIZE; i++) {
-    rows[i] = i;
-  }
-  return rows;
 }
 
 int main(int argc, char** argv) {
@@ -123,47 +101,47 @@ int main(int argc, char** argv) {
   fprintf(stderr, "X %f and Y %f\n", image_scale_x, image_scale_y);
   increment_x = (image_scale_x * 2) / pixel_x;
   increment_y = (image_scale_y * 2) / pixel_y;
+  variables->increment_x = increment_x;
+  variables->increment_y = increment_y;
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
   int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
   int *d_results;
   if (!results) error("calloc failed in allocating the result array");
-  variables->increment_x = increment_x;
-  variables->increment_y = increment_y;
 
-  // cuda global memories
+  // Setting up CUDA global memory
   vars *d_variables;
-  int* row = init_row();
-  int *d_row;
   cudaMalloc(&d_lens_x, sizeof(float) * nobjects);
   cudaMalloc(&d_lens_y, sizeof(float) * nobjects);
-  cudaMalloc(&d_row, sizeof(int) * PIXEL_SIZE);
+  cudaMalloc(&d_lens_mass, sizeof(float) * nobjects);
+
   cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));
   cudaMalloc(&d_variables, sizeof(vars));
 
   cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));
   cudaMemcpy(d_variables, variables, sizeof(vars), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_row, row, PIXEL_SIZE*sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
   cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_lens_mass, lens_mass, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 
-  dim3 dimb(SIZE, SIZE);
-  dim3 dimt(GRID_SIZE, GRID_SIZE);
-  dim3 dimg(PIXEL_SIZE);
-
-  int r = 0;
-  for(; r < PIXEL_SIZE; ++r) {
-    glensing<<<dimg, dimb>>>(d_lens_x, d_lens_y, d_results, &d_row[r], d_variables);
-  }
+  // Perform gravitational microlensing
+  dim3 bdim(TILE_SIZE, TILE_SIZE);
+  dim3 gdim(GRID_SIZE, GRID_SIZE);
+  glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
   cudaMemcpy(results, d_results,PIXEL_SIZE*PIXEL_SIZE*sizeof(float), cudaMemcpyDeviceToHost);
 
   int highest_c = highest(results, pixel_x * pixel_y);
   write_pgm(results, pixel_x, pixel_y, highest_c);
 
   // Free the memory allocated during processing
+  // GPU
   cudaFree(d_lens_x);
   cudaFree(d_lens_y);
+  cudaFree(d_lens_mass);
+  cudaFree(d_nobjects);
   cudaFree(d_results);
+  cudaFree(d_variables);
+  // CPU
   free(lens_x);
   free(lens_y);
   free(lens_mass);
