@@ -1,7 +1,7 @@
 # GPGPU
 BINARY = gpgpu_glens
 
-PRODUCTION_CFLAGS = 
+PRODUCTION_CFLAGS =
 PRODUCTION_DIR = build
 DEVELOPMENT_CFLAGS = -g -G -deviceemu
 DEVELOPMENT_DIR = debug
@@ -9,7 +9,7 @@ DEVELOPMENT_DIR = debug
 # Set up the directories for CUDA on the GPU machines
 ifeq ($(shell hostname | grep -q '^gpu' && echo yes || echo no), yes)
 	CUDA_DIR = /usr/local/cuda
-else 
+else
 	CUDA_DIR = /opt/cuda
 endif
 
