@@ -58,7 +58,7 @@ void read_lenses(const char *filename) {
 }
 
 /* write_pgm • Output the results as a PGM (portable gray map) image for review */
-void write_pgm(int *results, int pixel_x, int pixel_y, int highest) {
+void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
   FILE *fout;
   fprintf(stderr, "Writing resulting image...\n");
   if (!(fout = fopen("img.pgm", "w"))) error("Can't open results file...");
