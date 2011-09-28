@@ -38,7 +38,7 @@ int main(int argc, const char *argv[])
   increment_y = (image_scale_y * 2) / pixel_y;
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
-  int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
+  unsigned int *results = (int *)calloc(pixel_x * pixel_y, sizeof(unsigned int));
   if (!results) error("calloc failed in allocating the result array");
   int highest = 0;
 

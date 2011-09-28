@@ -39,7 +39,7 @@ void init_var(vars *var) {
   var->increment_y = 0;
 }
 
-int highest(int *results, int size) {
+int highest(unsigned int *results, int size) {
   int i, highest_count = 0;
   for(i = 0; i < size; ++i){
     if (results[i] > highest_count)
@@ -48,7 +48,7 @@ int highest(int *results, int size) {
   return highest_count;
 }
 
-__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, int* results, vars* v) {
+__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, vars* v) {
   // Position of Block -- likely useful in tree calculations
   //const int bx = blockIdx.x;
   //const int by = blockIdx.y;
@@ -106,8 +106,8 @@ int main(int argc, char** argv) {
   variables->increment_y = increment_y;
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
-  int *results = (int *)calloc(pixel_x * pixel_y, sizeof(float));
-  int *d_results;
+  unsigned int *results = (unsigned int *)calloc(pixel_x * pixel_y, sizeof(unsigned int));
+  unsigned int *d_results;
   if (!results) error("calloc failed in allocating the result array");
 
   // Setting up CUDA global memory
@@ -116,10 +116,10 @@ int main(int argc, char** argv) {
   cudaMalloc(&d_lens_y, sizeof(float) * nobjects);
   cudaMalloc(&d_lens_mass, sizeof(float) * nobjects);
 
-  cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));
+  cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMalloc(&d_variables, sizeof(vars));
 
-  cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(float));
+  cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMemcpy(d_variables, variables, sizeof(vars), cudaMemcpyHostToDevice);
   cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
   cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
   dim3 bdim(TILE_SIZE, TILE_SIZE);
   dim3 gdim(GRID_SIZE, GRID_SIZE);
   glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
-  cudaMemcpy(results, d_results,PIXEL_SIZE*PIXEL_SIZE*sizeof(float), cudaMemcpyDeviceToHost);
+  cudaMemcpy(results, d_results,PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
   int highest_c = highest(results, pixel_x * pixel_y);
   write_pgm(results, pixel_x, pixel_y, highest_c);
