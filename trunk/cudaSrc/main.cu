@@ -50,20 +50,20 @@ int highest(int *results, int size) {
 
 __global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, int* results, vars* v) {
   // Position of Block -- likely useful in tree calculations
-  const int bx = blockIdx.x;
-  const int by = blockIdx.y;
+  //const int bx = blockIdx.x;
+  //const int by = blockIdx.y;
   //
   const unsigned int row = blockIdx.y*blockDim.y + threadIdx.y;
   const unsigned int col = blockIdx.x*blockDim.x + threadIdx.x;
 
-  float start_x, start_y, noise_x, noise_y;
+  float start_x, start_y;
   float noise_x = v->increment_x / v->rpp;
   float noise_y = v->increment_y / v->rpp;
-  int dx, dy, iter;
+  int dx, dy, it;
   float dist;
 
   // TODO: Perform multiple ray calculations simultaneously
-  for(it = 0; it < rpp; ++it) {
+  for(it = 0; it < v->rpp; ++it) {
     start_x = (-v->image_scale_x) + row*v->increment_x;
     start_x += it * noise_x;
     start_y = (-v->image_scale_y) + col*v->increment_y;
@@ -80,7 +80,7 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
       start_y -= lens_mass[iter] * (start_y - lens_y[iter]) / dist;
     }
 
-    const float source_scale = variables->source_scale;
+    const float source_scale = v->source_scale;
     if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
         (dy >= -source_scale/2) && (dy <= source_scale/2)) {
       results[dy * PIXEL_SIZE + dx] += 1;
@@ -138,7 +138,6 @@ int main(int argc, char** argv) {
   cudaFree(d_lens_x);
   cudaFree(d_lens_y);
   cudaFree(d_lens_mass);
-  cudaFree(d_nobjects);
   cudaFree(d_results);
   cudaFree(d_variables);
   // CPU
