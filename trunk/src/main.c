@@ -61,7 +61,7 @@ int main(int argc, const char *argv[])
           // Work out the nearest pixel to put this in to
           // Add to remove the negative part of source_scale and then source_scale / pixels
           int px = (dx + source_scale/2) / (source_scale/pixel_x);
-          int py = source_scale/ (source_scale/pixel_y) - (dy + source_scale/2) / (source_scale/pixel_y);
+          int py = pixel_y - (dy + source_scale/2) / (source_scale/pixel_y);
           results[py * pixel_x + px] += 1;
           if (results[py * pixel_x + px] > highest) highest = results[py * pixel_x + px];
         }
