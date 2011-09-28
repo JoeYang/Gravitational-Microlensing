@@ -60,6 +60,7 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
   float noise_x = v->increment_x / v->rpp;
   float noise_y = v->increment_y / v->rpp;
   int dx, dy, it;
+  size_t k;
   float dist;
 
   // TODO: Perform multiple ray calculations simultaneously
@@ -74,10 +75,10 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
     dx = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 
-    for(iter = 0; iter < nobjects; ++iter) {
-      dist = pow(start_x - lens_x[iter], 2) + pow(start_y - lens_y[iter], 2);
-      start_x -= lens_mass[iter] * (start_x - lens_x[iter]) / dist;
-      start_y -= lens_mass[iter] * (start_y - lens_y[iter]) / dist;
+    for(k = 0; k < nobjects; ++k) {
+      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+      start_x -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      start_y -= lens_mass[k] * (start_y - lens_y[k]) / dist;
     }
 
     const float source_scale = v->source_scale;
