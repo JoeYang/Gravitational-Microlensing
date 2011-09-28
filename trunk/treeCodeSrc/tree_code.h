@@ -28,4 +28,13 @@ struct cell {
 	/* float higher_multipole_moment; */
 };
 
+void setup_root(float, float, float, float, int);
+void build_tree(int);
+void calculate_cm(cell *, int);
+void *salloc(size_t);
+void print_tree(cell *, int);
+void free_tree(cell *, int);
+void remove_empty_cells(cell *, int);
+void get_included_bodies(cell *, float, float, float);
+
 #endif

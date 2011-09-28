@@ -1,13 +1,5 @@
 #include "tree_code.h"
 
-void setup_root(float, float, float, float, int);
-void build_tree(int);
-void calculate_cm(cell *, int);
-void *salloc(size_t);
-void print_tree(cell *, int);
-void free_tree(cell *, int);
-void remove_empty_cells(cell *, int);
-
 cell * root;
 cell * curr;
 float *lens_x;
@@ -17,26 +9,62 @@ size_t nobjects;
 cell *cells; /* Cells to include in the lensing calculation */
 
 int main(void) {
-  int i;
+  
+  float kappa_star = 0.1;             // convergence in stars (sometimes written as sigma instead of kappa)
+  float kappa_c = 0.;                 // convergence in smooth matter
+  float gamma = 0.1;                  // shear
+  float kappa = kappa_star + kappa_c; // total convergence
+  float source_scale = 10.;
+  
+  float lens_scale_fudge_1 = 5.0; // lens plane scale fudge factor 1
+  float lens_scale_fudge_2 = 2.0; // lens plane scale fudge factor 2
+  float lens_rad_x = (0.5*source_scale + lens_scale_fudge_1) / (1.0 - kappa + gamma);
+  float lens_rad_y = (0.5*source_scale + lens_scale_fudge_1) / (1.0 - kappa - gamma);
+  float lens_rad = sqrt(lens_rad_x*lens_rad_x + lens_rad_y*lens_rad_y) + lens_scale_fudge_2;
+  
+  //int i;
   int ncells = 4;
-  nobjects = 10;
+  nobjects = 5;
   lens_x = (float *)salloc(sizeof(float) * nobjects);
   lens_y = (float *)salloc(sizeof(float) * nobjects);
   lens_mass = (float *)salloc(sizeof(float) * nobjects);
   
-  for (i = 0; i < nobjects; ++i) {
-    lens_x[i] = (i+1)*i;
+  /*for (i = 0; i < nobjects; ++i) {
+    lens_x[i] = (i+1)*(i+1);
     lens_y[i] = (i+1)*((float)i/2);
     lens_mass[i] = i+1;
-  }
+  }*/
   
-  setup_root(0, 1000, 1000, 0, ncells);
+  lens_x[0] = -2.288685;
+  lens_y[0] = 6.105015;
+  lens_mass[0] = 1;
+  lens_x[1] = 1.907909;
+  lens_y[1] = -6.716935;
+  lens_mass[1] = 2;
+  lens_x[2] = 11.015159;
+  lens_y[2] = 2.539164;
+  lens_mass[2] = 3;
+  lens_x[3] = 7.408977;
+  lens_y[3] = 2.888565;
+  lens_mass[3] = 4;
+  lens_x[4] = -0.290849;
+  lens_y[4] = 5.989615;
+  lens_mass[4] = 5;
+  
+  /* set up the root cell with dimensions lens_rad x lens_rad */
+  setup_root(-lens_rad, lens_rad, lens_rad, -lens_rad, ncells);
+  
   build_tree(ncells);
   calculate_cm(root, ncells);
   
+  printf("All cells\n");
   printf("index, centre mass x, centre mass y, total mass\n"); 
   remove_empty_cells(root, ncells);
   print_tree(root, ncells);
+
+  printf("Included bodies\n");
+  // 0.6 is the accuracy and (1.03, 1.46) is the position of the ray
+  get_included_bodies(root, 0.6, 1.03, 1.46);
   
   //free_tree(root);
   free(curr);
@@ -70,6 +98,7 @@ void print_tree(cell *cellptr, int ncells) {
   }
   printf("%d %f %f %f\n", cellptr->index, cellptr->cm_x, cellptr->cm_y, cellptr->mass);
 }
+
 
 /* Free all memory allocated to cells in the tree */
 void free_tree(cell *cellptr, int ncells) {
@@ -162,32 +191,40 @@ void calculate_cm(cell *curr, int ncells) {
 }
 
 /* Determine which bodies should be included in the deflection calculation */
-void get_included_bodies(cell *curr, float accuracy, float ray_x, float ray_y) {
-	float cell_width = curr->bottom_right[0] - curr->top_left[0];
-	/* distance between the cell's centre of mass and the light ray */
-	float d = sqrt(pow(ray_x - curr->cm_x, 2) + pow(ray_y - curr->cm_y, 2));
+/* Note: At the moment it's just printing out the bodies that should be included in the calculation */
+void get_included_bodies(cell *cellptr, float accuracy, float ray_x, float ray_y) {
+  int i;
+  float cell_width = cellptr->bottom_right[0] - cellptr->top_left[0];
+  /* distance between the cell's centre of mass and the light ray */
+  float d = sqrt(pow(ray_x - cellptr->cm_x, 2) + pow(ray_y - cellptr->cm_y, 2));
 	
-	/* if the ratio is less than the accuracy parameter, the body is sufficiently far away */
-	if (cell_width/d > accuracy) {
-		//include this cell/ lens in the calculation
-	}
-	// don't include this cell/ lens in the calculation
+  if (cell_width/d >= accuracy) {
+    for (i = 0; i < 4; ++i) {
+      if (cellptr->subcells[i] != 0) {
+        get_included_bodies(cellptr->subcells[i], accuracy, ray_x, ray_y);
+      } 
+    }
+  }
+  else {
+    printf("%f %f %f %d %f %f %f\n", accuracy, cell_width, cell_width/d, cellptr->index, cellptr->cm_x, cellptr->cm_y, cellptr->mass);
+  }
 }
 
 /* Construct the quadtree by adding all the lenses to it */
 void build_tree(int ncells) {
+  float dx, dy, lmass;
 	int i, j, lens1_index, lens2_index;
 	cell *temp;
 	
 	for (i = 0; i < nobjects; ++i) {
-		float dx = lens_x[i];
-		float dy = lens_y[i];
-		float lmass = lens_mass[i];
+		dx = lens_x[i];
+		dy = lens_y[i];
+		lmass = lens_mass[i];
     
 		/* Checks if lens is contained within the current cell */
 		while (dx > curr->top_left[0] && dx < curr->bottom_right[0] &&
            dy > curr->bottom_right[1] && dy < curr->top_left[1]) {
-			
+      
 			/* Update the total mass and weighted positions (to be used in centre of mass calculation) */
 			curr->mass += lmass;
 			curr->cm_y += lmass * dy;
