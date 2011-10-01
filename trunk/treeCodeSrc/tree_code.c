@@ -82,58 +82,22 @@ void calculate_cm(cell *curr, int ncells) {
 	}
 }
 
-/* Determine which bodies should be included in the deflection calculation */
-/* Note: At the moment it's just printing out the bodies that should be included in the calculation */
-void get_included_bodies(cell *cellptr, float accuracy, float ray_x, float ray_y) {
-  int i;
-  float cell_width = cellptr->bottom_right[0] - cellptr->top_left[0];
-  /* distance between the cell's centre of mass and the light ray */
-  float d = sqrt(pow(ray_x - cellptr->cm_x, 2) + pow(ray_y - cellptr->cm_y, 2));
 
-  if (cell_width/d >= accuracy) {
-  	  for (i = 0; i < 4; ++i) {
-  	  	  if (cellptr->subcells[i] != 0) {
-  	  	  	  get_included_bodies(cellptr->subcells[i], accuracy, ray_x, ray_y);
-  	  	  } 
-  	  }
+void increase_array(cell **cell_array, int num_elements) {
+  cell *temp = NULL;
+  if ((temp = (cell *)realloc(*cell_array, (num_elements+1) * sizeof(cell))) == NULL) {
+  	  printf("ERROR: realloc failed");
   }
-  else {
-  	  printf("%f %f %f %d %f %f %f\n", accuracy, cell_width, cell_width/d, cellptr->index, cellptr->cm_x, cellptr->cm_y, cellptr->mass);
-  }
+
+  *cell_array = temp;
 }
-
-/* Determine which bodies should be included in the deflection calculation */
-/* Note: At the moment it's just printing out the bodies that should be included in the calculation */
-/*void get_included_bodies(cell *cellptr, float accuracy, float ray_x, float ray_y) {
-  int i;
-  
-  if (cellptr->subcells == 0  && cellptr->clens.mass != 0) {
-    printf("%f %d %f %f %f\n", accuracy, cellptr->index, cellptr->cm_x, cellptr->cm_y, cellptr->mass);
-  }
-  else {
-    float cell_width = cellptr->bottom_right[0] - cellptr->top_left[0];
-    // distance between the cell's centre of mass and the light ray
-    float d = sqrt(pow(ray_x - cellptr->cm_x, 2) + pow(ray_y - cellptr->cm_y, 2));
-    
-    if (cell_width/d < accuracy) {
-      printf("%f %f %f %d %f %f %f\n", accuracy, cell_width, cell_width/d, cellptr->index, cellptr->cm_x, cellptr->cm_y, cellptr->mass);
-    }
-    else {
-      for (i = 0; i < 4; ++i) {
-        if (cellptr->subcells[i] != 0) {
-          get_included_bodies(cellptr->subcells[i], accuracy, ray_x, ray_y);
-        } 
-      }
-    }
-  }
-}*/
 
 /* Construct the quadtree by adding all the lenses to it */
 void build_tree(int ncells, cell * root) {
   
   float dx, dy, lmass;
   int i, j, lens1_index, lens2_index;
-  cell *temp, *curr = root;
+  cell *temp = NULL, *curr = root;
 
   for (i = 0; i < nobjects; ++i) {
 	dx = lens_x[i];
