@@ -11,7 +11,7 @@ CUDA_DIR = /usr/local/cuda
 
 NVCC = nvcc
 NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W
-NVCC_LDFLAGS = -L$(CUDA_DIR)/open64
+NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand 
 
 GPU_DIRS = $(PRODUCTION_DIR) $(DEVELOPMENT_DIR)
 GPU_SRC = main.cu util.c util.h constants.c constants.h
