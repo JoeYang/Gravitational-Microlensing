@@ -1,9 +1,9 @@
 CFLAGS = -g -lm
-SRC = main.c util.c util.h constants.c constants.h lens_gen.c global.h util.h
+SRC = constants.c constants.h lens_gen.c util.c util.h
 CC = gcc
 
-lens_gen: main.o constants.o
+lens_gen: main.o constants.o util.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 clean:
-	rm -rf ./*.o glens
+	rm -rf ./*.o lens_gen
