@@ -2,6 +2,7 @@
 #include <math.h>
 
 void lens_generate(float *new_lens_x, float *new_lens_y, int nobjects){
+  
   setup_constants();
 
   int it = 0;
