@@ -47,11 +47,12 @@ int main(int argc, const char *argv[])
   #pragma omp parallel for
   for(it = 0; it < rpp; ++it) {
     float x, y, dx, dy;
+    const unsigned int uniform_box = sqrt(rpp);
     for(y = -image_scale_y; y < image_scale_y; y += increment_y) {
       for(x = -image_scale_x; x < image_scale_x; x += increment_x) {
         // Noise is uniformly distributed -- i.e. it's not really noise
-        float noise_x = it * increment_x / rpp;
-        float noise_y = it * increment_y / rpp;
+        float noise_x = (it % uniform_box) * increment_x / uniform_box;
+        float noise_y = (it / uniform_box) * increment_y / uniform_box;
         dx = x + noise_x;
         dy = y + noise_y;
         deflect(&dx, &dy);
