@@ -25,14 +25,13 @@ int main(int argc, const char *argv[]){
   read_lenses(argv[1]);
   make_root(&root);
   printf("Values from root node: width: %f. height: %d, index: %d, top-left: %f %f, bot_right: %f %f\n", root->width, root->height, root->index, root->top_left[0], root->top_left[1], root->bot_right[0], root->bot_right[1]);
-  printf("made the root now just before the loop to make tree\n");
   for(i=0; i < nobjects; i++){
     //temp = (cell *)salloc(sizeof(cell));                /*allocating memory to temp cell*/
     temp_lens = (lens *)salloc(sizeof(lens));                /*allocating memory to temp lens*/
     temp_lens->x = lens_x[i];                          /*assigning x-coord to cell_lens x-coord*/
     temp_lens->y = lens_y[i];                          /*assigning y-coord to cell_lens y-coord*/
     temp_lens->m = lens_mass[i];                          /*assigning mass*/
-    printf("before we call the make_tree method\n");
+    //printf("before we call the make_tree method\n");
     make_tree(&root, temp_lens);
     free(temp_lens);
   }
@@ -43,7 +42,10 @@ int main(int argc, const char *argv[]){
   printf("The center of mass in y direction is: %.4f\n", root->center_mass_y/root->total_mass);
   printf("The x and y value for the top left corner is: x:%.4f, y: %.4f\n", root->top_left[0], root->top_left[1]);
   printf("The x and y value for the bottom right corner is: x:%.4f, y: %.4f\n", root->bot_right[0], root->bot_right[1]);
+
+  printf("printing values from tree: \n");
+  print_tree(&root);
   
-  free_tree(root);
+  free_tree(&root);
   return 0;
 }

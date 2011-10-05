@@ -15,7 +15,6 @@ typedef struct lens{
 /* struct of a cell in the tree that has
  * pointers to other cells or lens in the tree*/
 typedef struct cell{
-  //int idx;
   int index;
   float width;
   int height;
@@ -32,5 +31,6 @@ typedef struct cell{
 
 void make_root(cell **root);
 void make_tree(cell ** tree, lens *lens);
+void print_tree(cell ** tree);
 
 #endif
