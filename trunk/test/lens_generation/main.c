@@ -1,19 +1,26 @@
 #include <stdio.h>
 #include "lens_gen.c"
+#include "util.h"
 
-#define size	20
+float *lens_x, *lens_y, *lens_mass;
+size_t nobjects;
 
-int main(){
-	
-	float *lens_gen_x = (float*)malloc(size*sizeof(float));
-	float *lens_gen_y = (float*)malloc(size*sizeof(float));
-	
-	lens_generate(lens_gen_x, lens_gen_y, size);	
+int main(int argc, char *argv[]) {
+  size_t it;
 
-	int it;
-	for(it = 0; it< size; it++){
-		printf("%f %f\n", lens_gen_x[it], lens_gen_y[it]);
-	}
-	
-	return 0;
+  if (argc < 2) {
+    error("Please specify the number of lenses to generate");
+  }
+  nobjects = atoi(argv[1]);
+
+  float *lens_x = (float*)salloc(nobjects*sizeof(float));
+  float *lens_y = (float*)salloc(nobjects*sizeof(float));
+
+  lens_generate(lens_x, lens_y, nobjects);
+
+  for(it = 0; it < nobjects; it++){
+    printf("%f %f\n", lens_x[it], lens_y[it]);
+  }
+
+  return 0;
 }
