@@ -201,18 +201,19 @@ int main(int argc, char** argv) {
 	  dim3 bdim(TILE_SIZE, TILE_SIZE);
 	  dim3 gdim(GRID_SIZE, GRID_SIZE);
 	  glensing<<<gdim, bdim>>>(d_lens_x[gpu_c], d_lens_y[gpu_c], d_lens_mass[gpu_c], nobjects, d_results[gpu_c], d_variables[gpu_c]);
-  	  cudaMemcpy(results+(gpu_c*PIXEL_SIZE * PIXEL_SIZE*sizeof(unsigned int)), d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  	  cudaMemcpy(results+(gpu_c*PIXEL_SIZE * PIXEL_SIZE*sizeof(unsigned int)), d_results[gpu_c], PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
   
   }	  
   //group_glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
   
 	unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+	
 	int r_c=0;
 	for(;r_c<NUM_GPU*PIXEL_SIZE * PIXEL_SIZE; ++r_c){
-		final_result[r_c] = results[r_c] + results[r_c+PIXEL_SIZE * PIXEL_SIZE];
+		final_result[r_c] += results[r_c%PIXEL_SIZE * PIXEL_SIZE];
 	}
 	
-	int total = total_r(final_result, PIXEL_SIZE * PIXEL_SIZE);
+	int total = total_r(results, PIXEL_SIZE * PIXEL_SIZE);
 	printf("The total num of rays is %d\n", total);
 
   int highest_c = highest(final_result, PIXEL_SIZE * PIXEL_SIZE);
