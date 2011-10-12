@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
   }	  
   //group_glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
   
-	int final_result (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+	unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
 	int r_c=0;
 	for(;r_c<NUM_GPU*PIXEL_SIZE * PIXEL_SIZE; ++r_c){
 		final_result[r_c] = results[r_c] + results[r_c+PIXEL_SIZE * PIXEL_SIZE];
