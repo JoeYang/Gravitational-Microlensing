@@ -206,13 +206,17 @@ int main(int argc, char** argv) {
   }	  
   //group_glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
   
+	int final_result (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+	int r_c=0;
+	for(;r_c<NUM_GPU*PIXEL_SIZE * PIXEL_SIZE; ++r_c){
+		final_result[r_c] = results[r_c] + results[r_c+PIXEL_SIZE * PIXEL_SIZE];
+	}
 	
-	
-	  int total = total_r(results, PIXEL_SIZE * PIXEL_SIZE);
-	  printf("The total num of rays is %d\n", total);
+	int total = total_r(final_result, PIXEL_SIZE * PIXEL_SIZE);
+	printf("The total num of rays is %d\n", total);
 
-  int highest_c = highest(results, PIXEL_SIZE * PIXEL_SIZE);
-  write_pgm(results, PIXEL_SIZE, PIXEL_SIZE, highest_c);
+  int highest_c = highest(final_result, PIXEL_SIZE * PIXEL_SIZE);
+  write_pgm(final_result, PIXEL_SIZE, PIXEL_SIZE, highest_c);
 
   // Free the memory allocated during processing
   // GPU
