@@ -159,6 +159,7 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
 
 int main(int argc, char** argv) {
   float increment_x, increment_y;
+  int t;
   // Load relevant settings and data
   if (argc < 2) error("Requires argument with lens positions and optional mass");
   setup_constants();
@@ -173,7 +174,10 @@ int main(int argc, char** argv) {
   variables->increment_y = increment_y;
   fprintf(stderr, "Increments for X %f and Y %f\n", increment_x, increment_y);
 
-  unsigned int *results = (unsigned int *)calloc(NUM_GPU * PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+  unsigned int *results[NUM_GPU]; 
+  	  
+  	  for(t=0; t<NUM_GPU; ++t)
+		results[t] = (unsigned int *)calloc(NUM_GPU * PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
   unsigned int *d_results[NUM_GPU];
   if (!results) error("calloc failed in allocating the result array");
 
@@ -201,7 +205,7 @@ int main(int argc, char** argv) {
 	  dim3 bdim(TILE_SIZE, TILE_SIZE);
 	  dim3 gdim(GRID_SIZE, GRID_SIZE);
 	  glensing<<<gdim, bdim>>>(d_lens_x[gpu_c], d_lens_y[gpu_c], d_lens_mass[gpu_c], nobjects, d_results[gpu_c], d_variables[gpu_c]);
-  	  cudaMemcpy(results+(gpu_c*PIXEL_SIZE * PIXEL_SIZE*sizeof(unsigned int)), d_results[gpu_c], PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+  	  cudaMemcpy(results[gpu_c], d_results[gpu_c], PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
   
   }	  
   //group_glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
@@ -209,11 +213,12 @@ int main(int argc, char** argv) {
 	unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
 	
 	int r_c=0;
-	for(;r_c<NUM_GPU*PIXEL_SIZE * PIXEL_SIZE; ++r_c){
-		final_result[r_c] += results[r_c%PIXEL_SIZE * PIXEL_SIZE];
+	for(; r_c < PIXEL_SIZE*PIXEL_SIZE; ++r_c){
+		for(t=0; t<NUM_GPU; ++t)
+			final_result[r_c] += results[t][r_c];
 	}
 	
-	int total = total_r(results, PIXEL_SIZE * PIXEL_SIZE);
+	int total = total_r(final_result, PIXEL_SIZE * PIXEL_SIZE);
 	printf("The total num of rays is %d\n", total);
 
   int highest_c = highest(final_result, PIXEL_SIZE * PIXEL_SIZE);
@@ -230,7 +235,7 @@ int main(int argc, char** argv) {
   free(lens_x);
   free(lens_y);
   free(lens_mass);
-  free(results);
+  //free(results);
 
   return 0;
 }
