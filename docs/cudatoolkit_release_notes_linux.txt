@@ -1,0 +1,235 @@
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+NVIDIA CUDA
+Linux Release Notes
+Version 2.2
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+On some Linux releases, due to a GRUB bug in the handling of upper
+memory and a default vmalloc too small on 32-bit systems, it may be
+necessary to pass this information to the bootloader:
+
+vmalloc=256MB, uppermem=524288
+
+Example of grub conf:
+
+title Red Hat Desktop (2.6.9-42.ELsmp)
+root (hd0,0)
+uppermem 524288
+kernel /vmlinuz-2.6.9-42.ELsmp ro root=LABEL=/1 rhgb quiet vmalloc=256MB
+pci=nommconf
+initrd /initrd-2.6.9-42.ELsmp.img
+
+--------------------------------------------------------------------------------
+New Features
+--------------------------------------------------------------------------------
+
+  Hardware Support
+  o  See http://www.nvidia.com/object/cuda_learn_products.html
+
+  Platform Support
+  o  Additional OS support
+     - Red Hat Enterprise Linux 5.3
+     - SUSE Linux 11.1
+     - Fedora 10
+     - Ubuntu 8.10
+  o  Eliminated OS support
+     - SUSE Linux 10.3
+     - Fedora 8
+     - Ubuntu 7.10
+
+  API Features
+  o Pinned Memory Support
+     - These new memory management functions (cuMemHostAlloc() and
+       cudaHostAlloc()) enable pinned memory to be made "portable" (available
+       to all CUDA contexts), "mapped" (mapped into the CUDA address space),
+       and/or "write combined" (not cached and faster for the GPU to access).
+     - cuMemHostAlloc
+     - cuMemHostGetDevicePointer
+     - cudaHostAlloc
+     - cudaHostGetDevicePointer
+  o Function attribute query
+     - This function allows applications to query various function properties.
+     - cuFuncGetAttribute
+  o 2D Texture reads from pitch linear memory
+     - You can bind linear memory that you get from cuMemAlloc() or
+       cudaMalloc() directly to a 2D texture. In previous releases, you were
+       only able to bind cuArrayCreate() or cudaMallocArray() arrays to 2D
+       textures.
+     - cuTexRefSetAddress2D
+     - cudaBindTexture2D
+  o Flags for event creation
+     - Applications can now create events that use blocking synchronization.
+     - cudaEventCreateWithFlags
+  o New device management and context creation flags
+     - The function cudaSetDeviceFlags() allows the application to specify
+       attributes such as mapping host memory and support for blocking
+       synchronization.
+     - cudaSetDeviceFlags
+  o Improved runtime device management
+     - The runtime now defaults to attempting context creation on other
+       devices in the system before returning any failure messages. The new
+       call cudaSetValidDevices() allows the application to specify a list of
+       acceptable devices for use.
+     - cudaSetValidDevices
+  o Driver/runtime version query functions
+     - Applications can now directly query version information about the
+       underlying driver/runtime.
+     - cuDriverGetVersion
+     - cudaDriverGetVersion
+     - cudaRuntimeGetVersion
+  o New device attribute queries
+     - CU_DEVICE_ATTRIBUTE_INTEGRATED
+     - CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY
+     - CU_DEVICE_ATTRIBUTE_COMPUTE_MODE
+
+  Documentation
+  o Doxygen-generated and cross-referenced html, pdf, and man pages.
+     - Runtime API
+     - Driver API
+
+--------------------------------------------------------------------------------
+Major Bug Fixes
+--------------------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------------
+Known Issues
+--------------------------------------------------------------------------------
+
+o GPU enumeration order on multi-GPU systems is non-deterministic and
+  may change with this or future releases. Users should make sure to
+  enumerate all CUDA-capable GPUs in the system and select the most
+  appropriate one(s) to use.
+
+o Individual GPU program launches are limited to a run time
+  of less than 5 seconds on a GPU with a display attached.
+  Exceeding this time limit causes a launch failure reported
+  through the CUDA driver or the CUDA runtime. GPUs without
+  a display attached are not subject to the 5 second run time
+  restriction. For this reason it is recommended that CUDA is
+  run on a GPU that is NOT attached to an X display.
+
+o In order to run CUDA applications, the CUDA module must be
+  loaded and the entries in /dev created.  This may be achieved
+  by initializing X Windows, or by creating a script to load the
+  kernel module and create the entries.
+
+  An example script (to be run at boot time):
+
+  #!/bin/bash
+
+  modprobe nvidia
+
+  if [ "$?" -eq 0 ]; then
+
+  # Count the number of NVIDIA controllers found.
+  N3D=`/sbin/lspci | grep -i NVIDIA | grep "3D controller" | wc -l`
+  NVGA=`/sbin/lspci | grep -i NVIDIA | grep "VGA compatible controller" | wc -l`
+
+  N=`expr $N3D + $NVGA - 1`
+  for i in `seq 0 $N`; do
+  mknod -m 666 /dev/nvidia$i c 195 $i;
+  done
+
+  mknod -m 666 /dev/nvidiactl c 195 255
+
+  else
+  exit 1
+  fi
+
+o When compiling with GCC, special care must be taken for structs that
+  contain 64-bit integers.  This is because GCC aligns long longs
+  to a 4 byte boundary by default, while NVCC aligns long longs
+  to an 8 byte boundary by default.  Thus, when using GCC to
+  compile a file that has a struct/union, users must give the
+  -malign-double
+  option to GCC.  When using NVCC, this option is automatically
+  passed to GCC.
+
+o "#pragma unroll" sometimes does not unroll loops because of limits in the
+  compiler on loop bodies, which may cause a decrease in performance versus
+  CUDA 2.0. A user can override this limit on the command line with the
+  following nvcc compiler flag:
+
+  nvcc -Xopencc -OPT:unroll_size=200000
+
+  In most cases, this should override the built-in loop unrolling limits.
+  Unless a kernel uses #pragma unroll and shows a significant performance drop
+  from CUDA 2.0, this flag should not be used.
+
+o It is a known issue that cudaThreadExit() may not be called implicitly on
+  host thread exit. Due to this, developers are recommended to explicitly
+  call cudaThreadExit() while the issue is being resolved.
+
+o Cross-compilation with the --machine option is not supported.
+
+o The default compilation mode for host code is now C++. To restore the old
+  behavior, use the option --host-compilation=c
+
+o For maximum performance when using multiple byte sizes to access the
+  same data, coalesce adjacent loads and stores when possible rather
+  than using a union or individual byte accesses. Accessing the data via
+  a union may result in the compiler reserving extra memory for the object,
+  and accessing the data as individual bytes may result in non-coalesced
+  accesses. This will be improved in a future compiler release.
+
+o OpenGL interoperability
+  - OpenGL cannot access a buffer that is currently
+    *mapped*. If the buffer is registered but not mapped, OpenGL can do any
+    requested operations on the buffer.
+  - Deleting a buffer while it is mapped for CUDA results in undefined behavior.
+  - Attempting to map or unmap while a different context is bound than was
+    current during the buffer register operation will generally result in a
+    program error and should thus be avoided.
+  - Interoperability will use a software path on SLI
+  - Interoperability will use a software path if monitors are attached to
+    multiple GPUs and a single desktop spans more than one GPU
+    (i.e. X11 Xinerama).
+
+o Sending sigkill (ctrl-c) to an application that is currently running a
+  kernel on the GPU may not result in a clean shutdown of the process as the
+  kernel may continue running for a long time afterwards on the GPU. In such
+  cases, a system restart may be necessary before running further CUDA or
+  graphics applications.
+
+o Some MPI implementations add the current working directory to the $PATH
+  silently, which can trigger a segmentation fault in the CUDA driver if you
+  do not normally already have "." in your $PATH. The executable must be in
+  your path to avoid this error. The best solution is to specify the
+  executable to run using an absolute path or a relative path that at minimum
+  includes ./ in front of it.
+
+  Examples:  mpirun -np 2 $PWD/a.out
+             mpirun -np 2 ./a.out
+
+
+--------------------------------------------------------------------------------
+Open64 Sources
+--------------------------------------------------------------------------------
+
+The Open64 source files are controlled under terms of the GPL license.
+Current and previously released versions are located via anonymous ftp at
+download.nvidia.com in the CUDAOpen64 directory.
+
+
+--------------------------------------------------------------------------------
+Revision History
+--------------------------------------------------------------------------------
+
+  03/2009 - Version 2.2 Beta
+  11/2008 - Version 2.1 Beta
+  06/2008 - Version 2.0
+  11/2007 - Version 1.1
+  06/2007 - Version 1.0
+  06/2007 - Version 0.9
+  02/2007 - Version 0.8 - Initial public Beta
+
+
+--------------------------------------------------------------------------------
+More Information
+--------------------------------------------------------------------------------
+
+  For more information and help with CUDA, please visit
+  http://www.nvidia.com/cuda
