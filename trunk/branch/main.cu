@@ -6,10 +6,10 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
-//#include <curand_kernel.h>
+#include <curand_kernel.h>
 
 #define PIXEL_SIZE	512
-#define TILE_SIZE 	16
+#define TILE_SIZE 	8
 
 float *lens_x;
 float *lens_y;
@@ -56,56 +56,52 @@ int total_r(unsigned int *results, unsigned int size){
   return total;
 }
 
-__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, 
-					const size_t nobjects, unsigned int* results, const vars* v) {
+__global__ void glensing(const float3 *lenses, const size_t nobjects, unsigned int* results, const vars* v) {
 	
-  	const int col = blockDim.x * blockIdx.x;
-	const int row = blockDim.y * blockIdx.y;
-	const int bx = threadIdx.x;
-	const int by = threadIdx.y;  
-
+  	const float col = blockIdx.x;
+	const float row = blockIdx.y;
+	
+	const float bx = threadIdx.x;
+	const float by = threadIdx.y; 
 
 	__device__ __shared__ float base_x;
-	base_x = (-v->image_scale_x) + row*v->increment_x;
-  	__device__ __shared__ float base_y; 
-  	base_y = (-v->image_scale_y) + col*v->increment_y;	
+  	__device__ __shared__ float base_y;
   	
-	//Position of each light ray inside each Block
-		
+  	//Position of each light ray inside each Block	
 	__device__ __shared__ float unit_x;
-	unit_x = v->increment_x/TILE_SIZE;
 	__device__ __shared__ float unit_y;
-	unit_y = v->increment_y/TILE_SIZE;
-	
-	__device__ __shared__ float source_scale; 
+	__device__ __shared__ float source_scale;  
+ 	
+  	base_x = (-v->image_scale_x) + row*v->increment_x;
+  	base_y = (-v->image_scale_y) + col*v->increment_y;
+  	unit_x = v->increment_x/TILE_SIZE;
+  	unit_y = v->increment_y/TILE_SIZE;	
 	source_scale = v->source_scale;
+	
 	
 	float start_x, start_y, dx, dy;
 	size_t k;
 	float dist;
-		    
-    start_x = base_x + bx * unit_x ;
-    start_y = base_y + by * unit_y;
+   
+    start_x = base_x + (bx ) * unit_x;
+    start_y = base_y + (by ) * unit_y; 
 
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
     dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
-
+	
+	#pragma unroll 5
     for(k = 0; k < nobjects; ++k) {
-      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
-      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
-      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
+      dist = pow(start_x - lenses[k].x, 2) + pow(start_y - lenses[k].y, 2);
+      dx -= lenses[k].z * (start_x - lenses[k].x) / dist;
+      dy -= lenses[k].z * (start_y - lenses[k].y) / dist;
     }
     	
     if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
         (dy >= -source_scale/2) && (dy <= source_scale/2)) {
-     	 
      	 int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
-     	 int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
-    	 
+     	 int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);    	 
     	 atomicAdd(&results[py * PIXEL_SIZE + px], 1);
-    }
-    //atomicAdd(&results[row * PIXEL_SIZE + col], 1);
-	
+    }	
 }
 
 int main(int argc, char** argv) {  
@@ -130,29 +126,33 @@ int main(int argc, char** argv) {
 
   // Setting up CUDA global memory
   vars *d_variables;
-//  curandState_t *state;
-//  cudaMalloc(&state, sizeof(curandState_t));
-  cudaMalloc(&d_lens_x, sizeof(float) * nobjects);
-  cudaMalloc(&d_lens_y, sizeof(float) * nobjects);
-  cudaMalloc(&d_lens_mass, sizeof(float) * nobjects);
-
+  float3 *d_lenses;
+  float3 *lenses = (float3*)malloc(nobjects * sizeof(float3));
+  
+  size_t i = 0;
+  for(; i<nobjects; ++i){
+  	lenses[i].x = lens_x[i];
+  	lenses[i].y = lens_y[i]; 
+  	lenses[i].z = lens_mass[i];
+  }
+  
+  
+  cudaMalloc(&d_lenses, sizeof(float3) * nobjects);
   cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMalloc(&d_variables, sizeof(vars));
 
   cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMemcpy(d_variables, variables, sizeof(vars), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
-  cudaMemcpy(d_lens_mass, lens_mass, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
-
+  cudaMemcpy(d_lenses, lenses, sizeof(float3) * nobjects, cudaMemcpyHostToDevice);
+ 
 
   // Perform gravitational microlensing
-  dim3 gdim(PIXEL_SIZE, PIXEL_SIZE);
   dim3 bdim(TILE_SIZE, TILE_SIZE);
+  dim3 gdim(PIXEL_SIZE, PIXEL_SIZE);
   
-  glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
+  glensing<<<gdim, bdim>>>(d_lenses, nobjects, d_results, d_variables);
 
-  
+   
   cudaMemcpy(results, d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
   int highest_c = highest(results, PIXEL_SIZE * PIXEL_SIZE);
@@ -163,17 +163,15 @@ int main(int argc, char** argv) {
   
   // Free the memory allocated during processing
   // GPU
-  cudaFree(d_lens_x);
-  cudaFree(d_lens_y);
-  cudaFree(d_lens_mass);
+  cudaFree(d_lenses);
   cudaFree(d_results);
   cudaFree(d_variables);
-//  cudaFree(state);
   // CPU
   free(lens_x);
   free(lens_y);
   free(lens_mass);
   free(results);
 
+	
   return 0;
 }

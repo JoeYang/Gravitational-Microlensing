@@ -1,9 +1,9 @@
 # GPGPU
 BINARY = gpgpu_glens
 
-PRODUCTION_CFLAGS = -arch compute_11
+PRODUCTION_CFLAGS = -Xopencc -OPT:unroll_size=200000 -arch compute_11 -G
 PRODUCTION_DIR = build
-DEVELOPMENT_CFLAGS = -arch compute_11 -g -G
+DEVELOPMENT_CFLAGS = -Xopencc -OPT:unroll_size=200000 -arch compute_11 -g -G
 DEVELOPMENT_DIR = debug
 
 # Set up the directories for CUDA on the GPU machines
