@@ -3,21 +3,19 @@ BINARY = gpgpu_glens
 
 PRODUCTION_CFLAGS = -Xopencc -OPT:unroll_size=200000 -arch compute_11 -G
 PRODUCTION_DIR = build
-DEVELOPMENT_CFLAGS = -Xopencc -OPT:unroll_size=200000 -arch compute_11 -g -G
+DEVELOPMENT_CFLAGS =  -arch compute_11 -g -G
 DEVELOPMENT_DIR = debug
 
 # Set up the directories for CUDA on the GPU machines
 CUDA_DIR = /usr/local/cuda
 
 NVCC = nvcc
-NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W
-NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand  --ptxas-options=-v
+NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W 
+NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand -Xcompiler -fopenmp --ptxas-options=-v -Xopencc -OPT:unroll_size=200000
 
-SRC_DIR = src/
+SRC_DIR = ./src
 GPU_DIRS = $(PRODUCTION_DIR) $(DEVELOPMENT_DIR)
-GPU_SRC = $(SRC_DIR)/*.cu $(SRC_DIR)/*.h
-GPU_OBJ = $(PRODUCTION_DIR)/main.o $(PRODUCTION_DIR)/util.o $(PRODUCTION_DIR)/constants.o
-GPU_DEV_OBJ = $(DEVELOPMENT_DIR)/main.o $(DEVELOPMENT_DIR)/util.o $(DEVELOPMENT_DIR)/constants.o
+GPU_SRC = $(SRC_DIR)/main.cu $(SRC_DIR)/util.h $(SRC_DIR)/constants.h $(SRC_DIR)/global.h $(SRC_DIR)/constants.c $(SRC_DIR)/util.c
 GPU_BIN = $(PRODUCTION_DIR)/$(BINARY)
 GPU_DEV_BIN = $(DEVELOPMENT_DIR)/$(BINARY)
 
@@ -48,9 +46,9 @@ $(DEVELOPMENT_DIR)/%.o: %.cu
 $(DEVELOPMENT_DIR)/%.o: %.c
 	$(NVCC) $(NVCC_CFLAGS) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
 
-$(GPU_BIN): $(GPU_OBJ)
+$(GPU_BIN): $(GPU_SRC)
 	$(NVCC) $(NVCC_LDFLAGS) -o $@ $^
-$(GPU_DEV_BIN): $(GPU_DEV_OBJ)
+$(GPU_DEV_BIN): $(GPU_SRC)
 	$(NVCC) $(NVCC_LDFLAGS) -o $@ $^
 
 $(DEVELOPMENT_DIR):
