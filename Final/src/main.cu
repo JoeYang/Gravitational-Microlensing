@@ -37,14 +37,6 @@ float *lens_y;
 float *lens_mass;
 size_t nobjects;
 
-/*the struct that contains some key constant values that will be passed into GPU*/
-typedef struct d_constants{
-  unsigned int rpp;
-  float kappa_c, gamma_, source_scale;
-  float image_scale_x, image_scale_y;
-  float increment_x, increment_y;
-} vars;
-
 /*setting up some key parameters for the */
 void init_variables(d_constants *const_struct) {
   const_struct->rpp = RPP;
@@ -57,7 +49,26 @@ void init_variables(d_constants *const_struct) {
   const_struct->increment_y = 0;
 }
 
-__global__ void glensing_rpt(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
+__device__ void deflect(const float *lens_x, const float *lens_y, const float *lens_mass, float start_x, float start_y, float dx, float dy, const size_t nobjects, unsigned int *results, float scale){
+	int k;
+	float source_scale = scale;
+	
+	for(k = 0; k < nobjects; ++k) {
+      float dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
+    }
+
+    
+    if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
+      int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
+      int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
+      atomicAdd(&results[py * PIXEL_SIZE + px], 1);
+    }
+}
+
+__global__ void glensing_rpt(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, const d_constants* v) {
   const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
   const unsigned int col = blockIdx.y*blockDim.y + threadIdx.y;
   
@@ -65,28 +76,27 @@ __global__ void glensing_rpt(const float *lens_x, const float *lens_y, const flo
   const float initial_y = (-v->image_scale_y) + col*v->increment_y;
 
   const unsigned int uniform_box = sqrtf((float)v->rpp);
-
+  const float source_scale = v->source_scale;
+ 
   float start_x, start_y, dx, dy;
   unsigned int it, noise_x, noise_y;
   size_t k;
-  float dist;
-
+  
   for(it = 0; it < v->rpp; ++it) {
-      noise_x = it % uniform_box;
-      noise_y = it / uniform_box;
+    noise_x = it % uniform_box;
+    noise_y = it / uniform_box;
     start_x = initial_x + noise_x * v->increment_x / uniform_box;
     start_y = initial_y + noise_y * v->increment_y / uniform_box;
 
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
     dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
-
-    for(k = 0; k < nobjects; ++k) {
-      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+	
+	for(k = 0; k < nobjects; ++k) {
+      float dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
       dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
       dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
     }
-
-    const float source_scale = v->source_scale;
+ 
     if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
         (dy >= -source_scale/2) && (dy <= source_scale/2)) {
       int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
@@ -96,7 +106,7 @@ __global__ void glensing_rpt(const float *lens_x, const float *lens_y, const flo
   }
 }
 
-__global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
+__global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mass, const size_t nobjects, unsigned int* results, const d_constants* v) {
   	const float col = blockIdx.x;
 	const float row = blockIdx.y;
 	const float bx = threadIdx.x;
@@ -108,6 +118,7 @@ __global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mas
 	__device__ __shared__ float source_scale;  
  	__device__ __shared__ float base_x;
   	__device__ __shared__ float base_y; 
+  	
   	if((bx+by) == 0){
 	  	base_x = (-v->image_scale_x) + row*v->increment_x;
 	  	base_y = (-v->image_scale_y) + col*v->increment_y;
@@ -187,7 +198,7 @@ int main(int argc, char** argv){
 	  	cudaMalloc(&d_const_struct, sizeof(d_constants));
 	
 	  	cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
-	  	cudaMemcpy(d_const_struct, const_struct, sizeof(vars), cudaMemcpyHostToDevice);
+	  	cudaMemcpy(d_const_struct, const_struct, sizeof(d_constants), cudaMemcpyHostToDevice);
 	  	cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 	  	cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 	  	cudaMemcpy(d_lens_mass, lens_mass, sizeof(float) * nobjects, cudaMemcpyHostToDevice);

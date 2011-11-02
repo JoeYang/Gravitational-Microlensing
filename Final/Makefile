@@ -1,17 +1,17 @@
 # GPGPU
 BINARY = gpgpu_glens
 
-PRODUCTION_CFLAGS = -G
+PRODUCTION_CFLAGS = -O3
 PRODUCTION_DIR = build
-DEVELOPMENT_CFLAGS =  -arch compute_11 -g -G
+DEVELOPMENT_CFLAGS = -g --ptxas-options=-v
 DEVELOPMENT_DIR = debug
 
 # Set up the directories for CUDA on the GPU machines
 CUDA_DIR = /usr/local/cuda
 
-NVCC = nvcc
-NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W 
-NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand -Xcompiler -fopenmp --ptxas-options=-v -Xopencc -OPT:unroll_size=200000 -arch compute_11
+NVCC = $(CUDA_DIR)/bin/nvcc
+NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W -Xopencc -OPT:unroll_size=200000 -G
+NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand  -Xcompiler -fopenmp  -arch compute_11
 
 SRC_DIR = ./src
 GPU_DIRS = $(PRODUCTION_DIR) $(DEVELOPMENT_DIR)
@@ -37,19 +37,19 @@ depends:
 
 # real targets
 $(PRODUCTION_DIR)/%.o: %.cu
-	$(NVCC) $(NVCC_CFLAGS) $(PRODUCTION_CFLAGS) -c -o $@ $<
+	$(NVCC) $(PRODUCTION_CFLAGS) -c -o $@ $<
 $(PRODUCTION_DIR)/%.o: %.c
-	$(NVCC) $(NVCC_CFLAGS) $(PRODUCTION_CFLAGS) -c -o $@ $<
+	$(NVCC) $(PRODUCTION_CFLAGS) -c -o $@ $<
 
 $(DEVELOPMENT_DIR)/%.o: %.cu
-	$(NVCC) $(NVCC_CFLAGS) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
+	$(NVCC) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
 $(DEVELOPMENT_DIR)/%.o: %.c
-	$(NVCC) $(NVCC_CFLAGS) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
+	$(NVCC) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
 
 $(GPU_BIN): $(GPU_SRC)
 	$(NVCC) $(NVCC_LDFLAGS) -o $@ $^
 $(GPU_DEV_BIN): $(GPU_SRC)
-	$(NVCC) $(NVCC_LDFLAGS) -o $@ $^
+	$(NVCC) $(NVCC_CFLAGS) $(NVCC_LDFLAGS) -o $@ $^
 
 $(DEVELOPMENT_DIR):
 	mkdir -p $(DEVELOPMENT_DIR)
