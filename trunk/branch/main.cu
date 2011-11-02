@@ -6,10 +6,9 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
-#include <curand_kernel.h>
 
-#define PIXEL_SIZE	512
-#define TILE_SIZE 	8
+#define PIXEL_SIZE	128
+#define TILE_SIZE 	4
 
 float *lens_x;
 float *lens_y;
@@ -56,7 +55,7 @@ int total_r(unsigned int *results, unsigned int size){
   return total;
 }
 
-__global__ void glensing(const float3 *lenses, const size_t nobjects, unsigned int* results, const vars* v) {
+__global__ void glensing(const float *lens_x, float *lens_y, float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
 	
   	const float col = blockIdx.x;
 	const float row = blockIdx.y;
@@ -88,12 +87,11 @@ __global__ void glensing(const float3 *lenses, const size_t nobjects, unsigned i
 
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
     dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
-	
-	#pragma unroll 5
+
     for(k = 0; k < nobjects; ++k) {
-      dist = pow(start_x - lenses[k].x, 2) + pow(start_y - lenses[k].y, 2);
-      dx -= lenses[k].z * (start_x - lenses[k].x) / dist;
-      dy -= lenses[k].z * (start_y - lenses[k].y) / dist;
+      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
     }
     	
     if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
@@ -101,10 +99,13 @@ __global__ void glensing(const float3 *lenses, const size_t nobjects, unsigned i
      	 int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
      	 int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);    	 
     	 atomicAdd(&results[py * PIXEL_SIZE + px], 1);
-    }	
+    }
+	else
+		atomicAdd(&results[0],1);
 }
 
 int main(int argc, char** argv) {  
+	cudaSetDevice(1);
   float increment_x, increment_y;
   // Load relevant settings and data
   if (argc < 2) error("Requires argument with lens positions and optional mass");
@@ -126,31 +127,24 @@ int main(int argc, char** argv) {
 
   // Setting up CUDA global memory
   vars *d_variables;
-  float3 *d_lenses;
-  float3 *lenses = (float3*)malloc(nobjects * sizeof(float3));
+  cudaMalloc(&d_lens_x, sizeof(float) * nobjects);
+  cudaMalloc(&d_lens_y, sizeof(float) * nobjects);
+  cudaMalloc(&d_lens_mass, sizeof(float) * nobjects);
   
-  size_t i = 0;
-  for(; i<nobjects; ++i){
-  	lenses[i].x = lens_x[i];
-  	lenses[i].y = lens_y[i]; 
-  	lenses[i].z = lens_mass[i];
-  }
-  
-  
-  cudaMalloc(&d_lenses, sizeof(float3) * nobjects);
   cudaMalloc(&d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMalloc(&d_variables, sizeof(vars));
 
   cudaMemset(d_results, 0, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int));
   cudaMemcpy(d_variables, variables, sizeof(vars), cudaMemcpyHostToDevice);
-  cudaMemcpy(d_lenses, lenses, sizeof(float3) * nobjects, cudaMemcpyHostToDevice);
- 
+  cudaMemcpy(d_lens_x, lens_x, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_lens_mass, lens_mass, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 
   // Perform gravitational microlensing
   dim3 bdim(TILE_SIZE, TILE_SIZE);
   dim3 gdim(PIXEL_SIZE, PIXEL_SIZE);
   
-  glensing<<<gdim, bdim>>>(d_lenses, nobjects, d_results, d_variables);
+  glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_variables);
 
    
   cudaMemcpy(results, d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
@@ -163,15 +157,15 @@ int main(int argc, char** argv) {
   
   // Free the memory allocated during processing
   // GPU
-  cudaFree(d_lenses);
   cudaFree(d_results);
   cudaFree(d_variables);
+  cudaFree(d_lens_x);
+  cudaFree(d_lens_y);
+  cudaFree(d_lens_mass);
   // CPU
   free(lens_x);
   free(lens_y);
   free(lens_mass);
   free(results);
-
-	
   return 0;
 }
