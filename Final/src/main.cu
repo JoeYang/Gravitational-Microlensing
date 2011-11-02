@@ -8,8 +8,18 @@
 
 /*selecting one of the strategies on threads management*/
 /*setting the number after Pixel_Per_Block as '1' will allocate pixel per block, if the number is zero then allocate pixel per thread*/
-#define PIXEL_PER_BLOCK		(0)
+#define PIXEL_PER_BLOCK		(1)
 #define	PIXEL_PER_THREAD	(!PIXEL_PER_BLOCK)
+
+
+/*put the number of GPUs available here*/
+#define NUM_DEVICE	(1)
+
+#if PIXEL_PER_BLOCK
+	#define RPP	1
+#else
+	#define RPP (32/NUM_DEVICE)
+#endif		
 
 /*setting up the size of the image pixel*/
 #define PIXEL_SIZE 	(512)
@@ -20,9 +30,6 @@
 /*the tile size and the grid size, matters when the threads are managed as PIXEL_PER_THREAD, the numbers here are supposed to be optimal*/
 #define TILE_SIZE	(16)
 #define GRID_SIZE 	(PIXEL_SIZE/TILE_SIZE)
-
-/*put the number of GPUs available here*/
-#define NUM_DEVICE	(1)
 
 /*Pointers to the lens x,y co-ordinates and mass on the global memory*/
 float *lens_x;
@@ -40,7 +47,7 @@ typedef struct d_constants{
 
 /*setting up some key parameters for the */
 void init_variables(d_constants *const_struct) {
-  const_struct->rpp = 32;
+  const_struct->rpp = RPP;
   const_struct->kappa_c = kappa_c;
   const_struct->gamma_ = gamma_;
   const_struct->source_scale = source_scale;
@@ -50,13 +57,86 @@ void init_variables(d_constants *const_struct) {
   const_struct->increment_y = 0;
 }
 
-int highest(unsigned int *results, unsigned int size) {
-  unsigned int i, highest_count = 0;
-  for(i = 0; i < size; ++i){
-    if (results[i] > highest_count)
-      highest_count = results[i];
+__global__ void glensing_rpt(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
+  const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
+  const unsigned int col = blockIdx.y*blockDim.y + threadIdx.y;
+  
+  const float initial_x = (-v->image_scale_x) + row*v->increment_x;
+  const float initial_y = (-v->image_scale_y) + col*v->increment_y;
+
+  const unsigned int uniform_box = sqrtf((float)v->rpp);
+
+  float start_x, start_y, dx, dy;
+  unsigned int it, noise_x, noise_y;
+  size_t k;
+  float dist;
+
+  for(it = 0; it < v->rpp; ++it) {
+      noise_x = it % uniform_box;
+      noise_y = it / uniform_box;
+    start_x = initial_x + noise_x * v->increment_x / uniform_box;
+    start_y = initial_y + noise_y * v->increment_y / uniform_box;
+
+    dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
+    dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
+
+    for(k = 0; k < nobjects; ++k) {
+      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
+    }
+
+    const float source_scale = v->source_scale;
+    if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
+      int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
+      int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
+      atomicAdd(&results[py * PIXEL_SIZE + px], 1);
+    }
   }
-  return highest_count;
+}
+
+__global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mass, const size_t nobjects, unsigned int* results, const vars* v) {
+  	const float col = blockIdx.x;
+	const float row = blockIdx.y;
+	const float bx = threadIdx.x;
+	const float by = threadIdx.y;	
+  	
+  	//Position of each light ray inside each Block	
+	__device__ __shared__ float unit_x;
+	__device__ __shared__ float unit_y;
+	__device__ __shared__ float source_scale;  
+ 	__device__ __shared__ float base_x;
+  	__device__ __shared__ float base_y; 
+  	if((bx+by) == 0){
+	  	base_x = (-v->image_scale_x) + row*v->increment_x;
+	  	base_y = (-v->image_scale_y) + col*v->increment_y;
+	  	unit_x = v->increment_x/TILE_SIZE;
+	  	unit_y = v->increment_y/TILE_SIZE;	
+		source_scale = v->source_scale;
+  	}
+  	__syncthreads();
+  	
+	float start_x, start_y, dx, dy;
+	size_t k;
+	float dist;
+    start_x = base_x + (bx ) * unit_x;
+    start_y = base_y + (by ) * unit_y; 
+    dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
+    dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
+
+    for(k = 0; k < nobjects; ++k) {
+      dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
+      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
+      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
+    }
+    	
+    if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
+        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
+     	 int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
+     	 int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);    	 
+    	 atomicAdd(&results[py * PIXEL_SIZE + px], 1);
+    }
 }
 
 
@@ -69,7 +149,6 @@ int main(int argc, char** argv){
   d_constants *const_struct = (d_constants*)salloc(sizeof(d_constants));
   init_variables(const_struct);
   read_lenses(argv[1]);
-  
   
   int num_devices;
   cudaGetDeviceCount (&num_devices);
@@ -86,10 +165,10 @@ int main(int argc, char** argv){
 
   unsigned int *results[NUM_DEVICE];
   int i;
-  for(i=0; i<NUM_DEVICE; ++i)
-  results[i] = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
-  if (!results) error("calloc failed in allocating the result array");
-  
+  for(i=0; i<NUM_DEVICE; ++i){
+  	results[i] = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+  	if (!results[i]) error("calloc failed in allocating the result array");
+  }
     omp_set_num_threads(NUM_DEVICE);  // create as many CPU threads as there are CUDA devices
   #pragma omp parallel
   {
@@ -113,6 +192,21 @@ int main(int argc, char** argv){
 	  	cudaMemcpy(d_lens_y, lens_y, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 	  	cudaMemcpy(d_lens_mass, lens_mass, sizeof(float) * nobjects, cudaMemcpyHostToDevice);
 	  	
+	  	if(PIXEL_PER_BLOCK){	  		
+	  	  // Perform gravitational microlensing
+		  dim3 bdim(BLOCK_SIZE, BLOCK_SIZE);
+		  dim3 gdim(PIXEL_SIZE, PIXEL_SIZE);
+		  glensing_rpb<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_const_struct);
+		  cudaMemcpy(results[device_No], d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	  	}
+	  	else if(PIXEL_PER_THREAD){	  		
+		  // Perform gravitational microlensing
+		  dim3 bdim(TILE_SIZE, TILE_SIZE);
+		  dim3 gdim(GRID_SIZE, GRID_SIZE);  
+		  glensing_rpt<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_const_struct);
+  	  	  cudaMemcpy(results[device_No], d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
+	  	}
 	  	
 	  	/*free the variables*/
 	  	cudaFree(d_lens_x);	  
@@ -121,12 +215,30 @@ int main(int argc, char** argv){
 	  	cudaFree(d_results);
 		cudaFree(d_const_struct);    	
   }
+  
+  
+  unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
+	
+	int r_c=0, t;
+	for(; r_c < PIXEL_SIZE*PIXEL_SIZE; ++r_c){
+		for(t=0; t<NUM_DEVICE; ++t)
+			final_result[r_c] += results[t][r_c];
+	}
+	
+	int total = total_r(final_result, PIXEL_SIZE * PIXEL_SIZE);
+	printf("The total num of rays is %d\n", total);
+
+   int highest_c = highest(final_result, PIXEL_SIZE * PIXEL_SIZE);
+   write_pgm(final_result, PIXEL_SIZE, PIXEL_SIZE, highest_c);
+  
   /*free variables*/
   free(lens_x);
   free(lens_y);
   free(lens_mass);
-  free(results);
   free(const_struct);
+  free(final_result);
+  for(i=0; i<NUM_DEVICE; ++i)
+  	free(results[i]);
    
   /*exit the program*/
   return 0;

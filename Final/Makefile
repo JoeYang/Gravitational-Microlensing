@@ -1,7 +1,7 @@
 # GPGPU
 BINARY = gpgpu_glens
 
-PRODUCTION_CFLAGS = -Xopencc -OPT:unroll_size=200000 -arch compute_11 -G
+PRODUCTION_CFLAGS = -G
 PRODUCTION_DIR = build
 DEVELOPMENT_CFLAGS =  -arch compute_11 -g -G
 DEVELOPMENT_DIR = debug
@@ -11,7 +11,7 @@ CUDA_DIR = /usr/local/cuda
 
 NVCC = nvcc
 NVCC_CFLAGS = -I$(CUDA_DIR)/include --compiler-options -W 
-NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand -Xcompiler -fopenmp --ptxas-options=-v -Xopencc -OPT:unroll_size=200000
+NVCC_LDFLAGS = -L$(CUDA_DIR)/open64 -lcurand -Xcompiler -fopenmp --ptxas-options=-v -Xopencc -OPT:unroll_size=200000 -arch compute_11
 
 SRC_DIR = ./src
 GPU_DIRS = $(PRODUCTION_DIR) $(DEVELOPMENT_DIR)

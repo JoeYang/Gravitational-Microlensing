@@ -25,8 +25,8 @@ void nextline(FILE *input, char **buf, size_t *len) {
 
 /* read_lenses • Loads a lens file of format {x, y, (optional)mass} and allocate the correct sized array for the attributes */
 void read_lenses(const char *filename) {
-  size_t i, len = 0;
-  char c, *tmp, *line = NULL;
+  size_t i;
+  char c, *line = NULL;
   FILE *fp;
 
   fprintf(stderr, "Reading in lenses...\n");
@@ -37,7 +37,7 @@ void read_lenses(const char *filename) {
   while ((c = getc(fp)) != EOF) {
     if (c == '\n') ++nobjects;
   }
-  fprintf(stderr, "Total lenses found: %d\n", nobjects);
+  fprintf(stderr, "Total lenses found: %d\n", (int)nobjects);
   // Seek to the start of the file for actual reading
   fseek(fp, 0, SEEK_SET);
 
@@ -75,4 +75,22 @@ void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
     }
   }
   if (fclose(fout) != 0) error("Can't close results file...");
+}
+
+
+int total_r(unsigned int *results, unsigned int size){
+  unsigned int i, total = 0;
+  for(i = 0; i < size; ++i){
+        total += results[i];
+  }
+  return total;
+}
+
+int highest(unsigned int *results, unsigned int size) {
+  unsigned int i, highest_count = 0;
+  for(i = 0; i < size; ++i){
+    if (results[i] > highest_count)
+      highest_count = results[i];
+  }
+  return highest_count;
 }
