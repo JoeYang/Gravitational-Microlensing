@@ -47,7 +47,7 @@ $(DEVELOPMENT_DIR)/%.o: %.c
 	$(NVCC) $(DEVELOPMENT_CFLAGS) -c -o $@ $<
 
 $(GPU_BIN): $(GPU_SRC)
-	$(NVCC) $(NVCC_LDFLAGS) -o $@ $^
+	$(NVCC) $(NVCC_CFLAGS) $(NVCC_LDFLAGS) -o $@ $^
 $(GPU_DEV_BIN): $(GPU_SRC)
 	$(NVCC) $(NVCC_CFLAGS) $(NVCC_LDFLAGS) -o $@ $^
 

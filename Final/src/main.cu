@@ -5,12 +5,14 @@
 #include <assert.h>
 #include <stdio.h>
 #include <omp.h>
+#include <cuda.h>
+#include <curand.h>
+#include <curand_kernel.h>
 
 /*selecting one of the strategies on threads management*/
 /*setting the number after Pixel_Per_Block as '1' will allocate pixel per block, if the number is zero then allocate pixel per thread*/
 #define PIXEL_PER_BLOCK		(1)
 #define	PIXEL_PER_THREAD	(!PIXEL_PER_BLOCK)
-
 
 /*put the number of GPUs available here*/
 #define NUM_DEVICE	(1)
@@ -22,7 +24,7 @@
 #endif		
 
 /*setting up the size of the image pixel*/
-#define PIXEL_SIZE 	(512)
+#define PIXEL_SIZE 	(1024)
 
 /*the number of the size of the block mattters for PIXEL_PER_BLOCK, the number here is suppsoed to be optimal*/
 #define BLOCK_SIZE	(8)
@@ -49,24 +51,6 @@ void init_variables(d_constants *const_struct) {
   const_struct->increment_y = 0;
 }
 
-__device__ void deflect(const float *lens_x, const float *lens_y, const float *lens_mass, float start_x, float start_y, float dx, float dy, const size_t nobjects, unsigned int *results, float scale){
-	int k;
-	float source_scale = scale;
-	
-	for(k = 0; k < nobjects; ++k) {
-      float dist = pow(start_x - lens_x[k], 2) + pow(start_y - lens_y[k], 2);
-      dx -= lens_mass[k] * (start_x - lens_x[k]) / dist;
-      dy -= lens_mass[k] * (start_y - lens_y[k]) / dist;
-    }
-
-    
-    if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
-        (dy >= -source_scale/2) && (dy <= source_scale/2)) {
-      int px = (dx + source_scale/2) / (source_scale/PIXEL_SIZE);
-      int py = PIXEL_SIZE - (dy + source_scale/2) / (source_scale/PIXEL_SIZE);
-      atomicAdd(&results[py * PIXEL_SIZE + px], 1);
-    }
-}
 
 __global__ void glensing_rpt(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, const d_constants* v) {
   const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
@@ -118,6 +102,7 @@ __global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mas
 	__device__ __shared__ float source_scale;  
  	__device__ __shared__ float base_x;
   	__device__ __shared__ float base_y; 
+  	__device__ __shared__ curandStateSobol32_t sharedCurandState;
   	
   	if((bx+by) == 0){
 	  	base_x = (-v->image_scale_x) + row*v->increment_x;
@@ -131,8 +116,8 @@ __global__ void glensing_rpb(const float *lens_x, float *lens_y, float *lens_mas
 	float start_x, start_y, dx, dy;
 	size_t k;
 	float dist;
-    start_x = base_x + (bx ) * unit_x;
-    start_y = base_y + (by ) * unit_y; 
+    start_x = base_x + (bx * (1 + curand_uniform ( &sharedCurandState))) * unit_x;
+    start_y = base_y + (by * (1 + curand_uniform ( &sharedCurandState))) * unit_y; 
     dx = (1-v->gamma_)*start_x - v->kappa_c*start_x;
     dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 
@@ -180,6 +165,7 @@ int main(int argc, char** argv){
   	results[i] = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
   	if (!results[i]) error("calloc failed in allocating the result array");
   }
+    
     omp_set_num_threads(NUM_DEVICE);  // create as many CPU threads as there are CUDA devices
   #pragma omp parallel
   {
@@ -226,7 +212,6 @@ int main(int argc, char** argv){
 	  	cudaFree(d_results);
 		cudaFree(d_const_struct);    	
   }
-  
   
   unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
 	

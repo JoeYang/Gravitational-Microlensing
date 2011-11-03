@@ -1,8 +1,8 @@
 #include "global.h"
-
 #ifndef UTIL_H_
 #define UTIL_H_
 
+#include <time.h>
 /*the struct that contains some key constant values that will be passed into GPU*/
 typedef struct d_constants{
   unsigned int rpp;
