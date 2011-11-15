@@ -1,16 +1,18 @@
-#include "global.h"
-#include "util.h"
-#include "constants.h"
-#include "tree_struct.h"
-
+extern "C"{
+	#include "global.h"
+	#include "util.h"
+	#include "constants.h"
+	#include "tree_struct.h"
+	
+}
 #include <assert.h>
 #include <stdio.h>
 #include <omp.h>
 #include <cuda.h>
-#include <curand.h>
-#include <curand_kernel.h>
+#include "curand.h"
+#include "curand_kernel.h"
 
-#define PIXEL_SIZE 	(4096)
+#define PIXEL_SIZE 	(1024)
 
 /*put the number of GPUs available here*/
 #define NUM_DEVICE	(2)
@@ -181,7 +183,7 @@ int main(int argc, char** argv){
 		cudaFree(d_lens_y);
 		cudaFree(d_lens_mass);
 		cudaFree(d_const_struct);
-		
+		cudaFree(globalState);
 	}
 	int r_c=0, t;
 	for(r_c = 0; r_c < PIXEL_SIZE*PIXEL_SIZE; ++r_c){
