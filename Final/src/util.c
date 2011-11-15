@@ -72,7 +72,7 @@ void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
   char pgmName[100];
   sprintf(pgmName, "results/%s.pgm", filename);
 
-  
+  if (!(fout = fopen(pgmName, "w"))) system("mkdir results/");
   if (!(fout = fopen(pgmName, "w"))) error("Can't open results file...");
   // Writing the PGM format which starts with P2
   fprintf(fout, "P2\n");
@@ -88,12 +88,12 @@ void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
   }
   if (fclose(fout) != 0) error("Can't close results file...");
   
-  fprintf(stderr, "Converting the observation lensing image into png format…\n"); 
-  char pngName[100], command[100];
-  sprintf(pngName, "results/%s.png", filename);
+  //fprintf(stderr, "Converting the observation lensing image into png format.\n"); 
+  //char pngName[100], command[100];
+  //sprintf(pngName, "results/%s.png", filename);
   
-  sprintf(command, "convert %s %s", pgmName, pngName);
-  system(command);
+  //sprintf(command, "convert %s %s", pgmName, pngName);
+  //system(command);
   fprintf(stderr, "The image has been saved in the results folder.\n");
 }
 
