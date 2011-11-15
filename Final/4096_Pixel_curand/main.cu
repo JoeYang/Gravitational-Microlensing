@@ -1,9 +1,8 @@
-extern "C" {
 #include "global.h"
 #include "util.h"
 #include "constants.h"
 #include "tree_struct.h"
-}
+
 #include <assert.h>
 #include <stdio.h>
 #include <omp.h>
@@ -65,7 +64,7 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
 	const float source_scale = v->source_scale;
 	
 	float start_x, start_y, dx, dy;
-	size_t k, it;
+	size_t k;
 	
 	curandState localState = globalState[id];
 	start_x = initial_x + curand_uniform(&localState) * increment_x;
@@ -129,7 +128,8 @@ int main(int argc, char** argv){
 	}
 	
 	unsigned int *final_result = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
-	#pragma omp parallel num_threads(KERNEL_CALL_NUM)
+	omp_set_num_threads(KERNEL_CALL_NUM);
+	#pragma omp parallel 
 	{
 		int device_No = omp_get_thread_num()%NUM_DEVICE;
 		unsigned int thread_No = omp_get_thread_num();
@@ -165,7 +165,7 @@ int main(int argc, char** argv){
 			printf("Device: %d Thread: %d %4d/%4d Start\n", device_No, thread_No, iteration, ITERATION);
 			// Perform gravitational microlensing
 			 
-			glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_const_struct, thread_No);
+			glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_const_struct, globalState);
 			cudaMemcpy(temp_results, d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);  
 			for(int k = 0; k<PIXEL_SIZE*PIXEL_SIZE; ++k){
 				results[thread_No][k] += temp_results[k];
