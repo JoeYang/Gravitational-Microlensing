@@ -4,7 +4,7 @@ LD_LIBRARY_PATH	:= -L/usr/local/cuda/lib64
 
 all: glensing
 
-glensing: main.cu constants.c util.c 
+glensing: main.cu constants.c util.c tree_struct.c 
 	$(NVCC) $(NVCCFLAGS) $(LD_LIBRARY_PATH) -o $@ $^
 	
 clean:

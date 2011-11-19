@@ -20,6 +20,6 @@ typedef struct vars {
 
 //void init_var(vars *var);
 //int highest(unsigned int *results, unsigned int size);
-__global__ void glensing(const float4 * lenses, const size_t nobjects, unsigned int* results, const vars* v);
+__global__ void glensing(const float * d_lenses_x, const float * d_lenses_y, const float * d_lenses_m, const size_t nobjects, unsigned int* results, const vars* v);
 
 #endif

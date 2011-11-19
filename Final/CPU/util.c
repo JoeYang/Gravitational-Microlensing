@@ -25,8 +25,8 @@ void nextline(FILE *input, char **buf, size_t *len) {
 
 /* read_lenses • Loads a lens file of format {x, y, (optional)mass} and allocate the correct sized array for the attributes */
 void read_lenses(const char *filename) {
-  size_t i;
-  char c, *line = NULL;
+  size_t i, len = 0;
+  char c, *tmp, *line = NULL;
   FILE *fp;
 
   fprintf(stderr, "Reading in lenses...\n");
@@ -37,7 +37,7 @@ void read_lenses(const char *filename) {
   while ((c = getc(fp)) != EOF) {
     if (c == '\n') ++nobjects;
   }
-  fprintf(stderr, "Total lenses found: %d\n", (int)nobjects);
+  fprintf(stderr, "Total lenses found: %d\n", nobjects);
   // Seek to the start of the file for actual reading
   fseek(fp, 0, SEEK_SET);
 
@@ -61,19 +61,7 @@ void read_lenses(const char *filename) {
 void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
   FILE *fout;
   fprintf(stderr, "Writing resulting image...\n");
-  
-  time_t clock;
-  time(&clock);
-  struct tm *timeinfo;
-  timeinfo = localtime(&clock);
-  char filename[40];
-  strftime(filename,40, "img-%Y-%b-%d-%H:%M:%S", timeinfo);
-  
-  char pgmName[100];
-  sprintf(pgmName, "results/%s.pgm", filename);
-
-  if (!(fout = fopen(pgmName, "w"))) system("mkdir results/");
-  if (!(fout = fopen(pgmName, "w"))) error("Can't open results file...");
+  if (!(fout = fopen("img.pgm", "w"))) error("Can't open results file...");
   // Writing the PGM format which starts with P2
   fprintf(fout, "P2\n");
   // Followed by pixel width, height and the value considered white
@@ -87,30 +75,4 @@ void write_pgm(unsigned int *results, int pixel_x, int pixel_y, int highest) {
     }
   }
   if (fclose(fout) != 0) error("Can't close results file...");
-  
-  //fprintf(stderr, "Converting the observation lensing image into png format.\n"); 
-  //char pngName[100], command[100];
-  //sprintf(pngName, "results/%s.png", filename);
-  
-  //sprintf(command, "convert %s %s", pgmName, pngName);
-  //system(command);
-  fprintf(stderr, "The image has been saved in the results folder.\n");
-}
-
-
-int total_r(unsigned int *results, unsigned int size){
-  unsigned int i, total = 0;
-  for(i = 0; i < size; ++i){
-        total += results[i];
-  }
-  return total;
-}
-
-int highest(unsigned int *results, unsigned int size) {
-  unsigned int i, highest_count = 0;
-  for(i = 0; i < size; ++i){
-    if (results[i] > highest_count)
-      highest_count = results[i];
-  }
-  return highest_count;
 }

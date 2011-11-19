@@ -15,7 +15,7 @@ void setup_constants(void) {
   kappa = kappa_star + kappa_c; // total convergence
   /* Source plane (where the light rays are collected) is a square with side length source_scale,
      measured in Einstein Radii. */
-  source_scale = 10.;       // size of the source plane in Einstein Radii
+  source_scale = 20.;       // size of the source plane in Einstein Radii
   /* Size of the image plane (from which the light rays are shot) depends on the desired size of the
      source plane and the lensing parameters. Note that the image plane is rectangular -- 2d ray
      positions should be randomly generated in the ranges [-image_scale_x, image_scale_x] and

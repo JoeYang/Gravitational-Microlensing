@@ -5,7 +5,7 @@
 #include "treecode_kernel.h"
 #define PIXEL_SIZE (512)
 
-__global__ void glensing(const float4 * lenses, const size_t nobjects, unsigned int* results, const vars* v) {
+__global__ void glensing(const float * d_lenses_x, const float * d_lenses_y, const float * d_lenses_m, const size_t nobjects, unsigned int* results, const vars* v) {
   const unsigned int lens_idx = blockIdx.y*blockDim.y + blockIdx.x*nobjects;  //+ blockIdx.y*blockDim.y;
 
   const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
@@ -33,9 +33,9 @@ __global__ void glensing(const float4 * lenses, const size_t nobjects, unsigned 
     dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 
     for(k = 0; k < nobjects; ++k) {
-      dist = pow(start_x - lenses[lens_idx + k].x, 2) + pow(start_y - lenses[lens_idx + k].y, 2);
-      dx -= lenses[lens_idx + k].w * (start_x - lenses[lens_idx + k].x) / dist;
-      dy -= lenses[lens_idx + k].w * (start_y - lenses[lens_idx + k].y) / dist;
+      dist = pow(start_x - d_lenses_x[lens_idx + k], 2) + pow(start_y - d_lenses_y[lens_idx + k], 2);
+      dx -= d_lenses_m[lens_idx + k] * (start_x - d_lenses_x[lens_idx + k]) / dist;
+      dy -= d_lenses_m[lens_idx + k] * (start_y - d_lenses_y[lens_idx + k]) / dist;
     }
 
     const float source_scale = v->source_scale;
