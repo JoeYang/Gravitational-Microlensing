@@ -31,7 +31,9 @@ extern "C"{
 #define TILE_SIZE	(16)
 #define GRID_SIZE 	(PIXEL_SIZE/TILE_SIZE)
 
-float4 *lenses, *d_lenses;
+//float4 *lenses, *d_lenses;
+float *lenses_x, *lenses_y, *lenses_m;
+float *d_lenses_x, *d_lenses_y, *d_lenses_m;
 /*Pointers to the lens x,y co-ordinates and mass on the global memory*/
 float *lens_x;
 float *lens_y;
@@ -56,7 +58,8 @@ void init_variables(d_constants *const_struct) {
 /*
 * Method to get the required lenses for the lensing calculation
 */
-void get_lenses(float4 ** lenses, cell ** tree, float delta, float ray_x, float ray_y){
+//void get_lenses(float4 ** lenses, cell ** tree, float delta, float ray_x, float ray_y){
+void get_lenses(float ** lenses_x, float ** lenses_y, float ** lenses_m, cell ** tree, float delta, float ray_x, float ray_y){
   int j, i, has_cells=0, has_lenses=0;
 
   /* finding the values of the current cell to decide if it is to be included in the calculation*/
@@ -75,36 +78,36 @@ void get_lenses(float4 ** lenses, cell ** tree, float delta, float ray_x, float 
     //lens_index += has_lenses;
     for(i=0; i<QUAD_IDX; i++){
       if((*tree)->lenses[i]){
-        (*lenses)[lens_index].x = (*tree)->lenses[i]->x;
-        (*lenses)[lens_index].y = (*tree)->lenses[i]->y;
-        (*lenses)[lens_index].w = (*tree)->lenses[i]->m;
+        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
         lens_index++;
       }
-      if((*tree)->desc[i]) get_lenses(lenses, &((*tree)->desc[i]), delta, ray_x, ray_y);
+      if((*tree)->desc[i]) get_lenses(lenses_x, lenses_y, lenses_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
     }
   }
   else if(has_lenses==1 && has_cells==0){
     for(i=0; i<QUAD_IDX; i++){
       if((*tree)->lenses[i]){
-        (*lenses)[lens_index].x = (*tree)->lenses[i]->x;
-        (*lenses)[lens_index].y = (*tree)->lenses[i]->y;
-        (*lenses)[lens_index].w = (*tree)->lenses[i]->m;
+        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
       }
     }
     lens_index++;
     return;
   }
   else if(ratio<delta){
-    (*lenses)[lens_index].x = cell_x;
-    (*lenses)[lens_index].y = cell_y;
-    (*lenses)[lens_index].w =(*tree)->total_mass;
+    (*lenses_x)[lens_index] = cell_x;
+    (*lenses_y)[lens_index] = cell_y;
+    (*lenses_m)[lens_index] =(*tree)->total_mass;
     lens_index++;
     return;
   }
   else{
     int i;
     for(i=0; i<QUAD_IDX; i++){
-      if((*tree)->desc[i]) get_lenses(lenses, &((*tree)->desc[i]), delta, ray_x, ray_y);
+      if((*tree)->desc[i]) get_lenses(lenses_x, lenses_y, lenses_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
     }
   }
 }
@@ -116,7 +119,7 @@ __global__ void curand_setup(curandState* globalState, unsigned long seed){
 	curand_init(seed, id, 0, &globalState[id]);
 }
 
-__global__ void glensing(const float4 *lenses,  const size_t nobjects, unsigned int* results, const d_constants* v, curandState* globalState){
+__global__ void glensing(const float * d_lenses_x, const float * d_lenses_y, const float * d_lenses_m,  const size_t nobjects, unsigned int* results, const d_constants* v, curandState* globalState){
 	const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
 	const unsigned int col = blockIdx.y*blockDim.y + threadIdx.y;
 	const unsigned int id = row*PIXEL_SIZE + col;
@@ -141,9 +144,9 @@ __global__ void glensing(const float4 *lenses,  const size_t nobjects, unsigned 
 	dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 
 	for(k = 0; k < nobjects; ++k) {
-		float dist = pow(start_x - lenses[lens_idx + k].x, 2) + pow(start_y - lenses[lens_idx + k].y, 2);
-		dx -= lenses[lens_idx + k].w * (start_x - lenses[lens_idx + k].x) / dist;
-		dy -= lenses[lens_idx + k].w * (start_y - lenses[lens_idx + k].y) / dist;
+		float dist = pow(start_x - d_lenses_x[lens_idx + k], 2) + pow(start_y - d_lenses_y[lens_idx + k], 2);
+		dx -= d_lenses_m[lens_idx + k] * (start_x - d_lenses_x[lens_idx + k]) / dist;
+		dy -= d_lenses_m[lens_idx + k] * (start_y - d_lenses_y[lens_idx + k]) / dist;
 	}
 
 	if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
@@ -198,7 +201,9 @@ int main(int argc, char** argv){
 	float temp_x = -image_scale_x + increment_x;
 	float temp_y = image_scale_y - increment_y;
 	get_lens_count(&root, delta, temp_x, temp_y, num_lenses);
-	lenses = (float4 *)salloc(sizeof(float4)*array_size*(*num_lenses));
+  lenses_x = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
+  lenses_y = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
+  lenses_m = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
 	
   int count = 0;
 /* performing all walks here on the CPU then transferring these to the GPU*/
@@ -210,14 +215,20 @@ int main(int argc, char** argv){
 		  float tile_x = -image_scale_x + increment_x;
 		  float tile_y = image_scale_y - increment_y;
 		  get_lens_count(&root, delta, tile_x, tile_y, num_lenses);
-		  float4 *inc_lenses = (float4 *)salloc(sizeof(float4)*(*num_lenses));
-		  get_lenses(&inc_lenses, &root, delta, tile_x, tile_y);
+      float *inc_lenses_x = (float *)salloc(sizeof(float)*(*num_lenses));
+      float *inc_lenses_y = (float *)salloc(sizeof(float)*(*num_lenses));
+      float *inc_lenses_m = (float *)salloc(sizeof(float)*(*num_lenses));
+      get_lenses(&inc_lenses_x, &inc_lenses_y, &inc_lenses_m, &root, delta, tile_x, tile_y);
 
 		  for(m = 0; m<(*num_lenses); m++){
-			int idx = j*(PIXEL_SIZE/TILE_SIZE)*(*num_lenses) +i*(*num_lenses) +m;
-			lenses[idx] = inc_lenses[m];
+			  int idx = j*(PIXEL_SIZE/TILE_SIZE)*(*num_lenses) +i*(*num_lenses) +m;
+        lenses_x[idx] = inc_lenses_x[m];
+        lenses_y[idx] = inc_lenses_y[m];
+        lenses_m[idx] = inc_lenses_m[m];
 		  }
-		  free(inc_lenses);
+      free(inc_lenses_x);
+      free(inc_lenses_y);
+      free(inc_lenses_m);
 		  count++;
 		}
 	}
@@ -264,9 +275,15 @@ int main(int argc, char** argv){
 		curand_setup<<<gdim, bdim>>>(globalState, time(NULL));
 		cudaMemcpy(d_const_struct, const_struct, sizeof(d_constants), cudaMemcpyHostToDevice);
 	
-		cudaMalloc(&d_lenses, sizeof(float4)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
-		cudaMemset(d_lenses, 0, sizeof(float4)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
-		cudaMemcpy(d_lenses, lenses, sizeof(float4)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_lenses_x, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMalloc(&d_lenses_y, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMalloc(&d_lenses_m, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMemset(d_lenses_x, 0, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMemset(d_lenses_y, 0, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMemset(d_lenses_m, 0, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE));
+    cudaMemcpy(d_lenses_x, lenses_x, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_lenses_y, lenses_y, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_lenses_m, lenses_m, sizeof(float)*(*num_lenses)*(PIXEL_SIZE/TILE_SIZE)*(PIXEL_SIZE/TILE_SIZE), cudaMemcpyHostToDevice);
 		
 		int iteration;
 		for(iteration = 0; iteration < ITERATION; ++iteration){		
@@ -276,7 +293,7 @@ int main(int argc, char** argv){
 			unsigned int *temp_results = (unsigned int *)calloc(PIXEL_SIZE * PIXEL_SIZE, sizeof(unsigned int));
 			printf("Device: %d Thread: %d %4d/%4d Start\n", device_No, thread_No, iteration, ITERATION);
 			// Perform gravitational microlensing
-			glensing<<<gdim, bdim>>>(d_lenses, (*num_lenses), d_results, d_const_struct, globalState);
+			glensing<<<gdim, bdim>>>(d_lenses_x, d_lenses_y, d_lenses_m, (*num_lenses), d_results, d_const_struct, globalState);
 			//glensing<<<gdim, bdim>>>(d_lens_x, d_lens_y, d_lens_mass, nobjects, d_results, d_const_struct, globalState);
 			cudaMemcpy(temp_results, d_results, PIXEL_SIZE*PIXEL_SIZE*sizeof(unsigned int), cudaMemcpyDeviceToHost);  
 			for(int k = 0; k<PIXEL_SIZE*PIXEL_SIZE; ++k){
@@ -292,7 +309,9 @@ int main(int argc, char** argv){
 		
 		cudaFree(d_const_struct);
 		cudaFree(globalState);
-		cudaFree(d_lenses);
+    cudaFree(d_lenses_x);
+    cudaFree(d_lenses_y);
+    cudaFree(d_lenses_m);
 	}
 	int r_c=0, t;
 	for(r_c = 0; r_c < PIXEL_SIZE*PIXEL_SIZE; ++r_c){
@@ -311,7 +330,9 @@ int main(int argc, char** argv){
 	free(lens_mass);
 	free(const_struct);
 	free(final_result);
-	free(lenses);
+  free(lenses_x);
+  free(lenses_y);
+  free(lenses_m);
 	free(num_lenses);
 	free_tree(&root);
 	for(i=0; i<KERNEL_CALL_NUM; ++i)
