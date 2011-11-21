@@ -55,7 +55,7 @@ void init_variables(d_constants *const_struct) {
 /*
 * Method to get the required lenses for the lensing calculation
 */
-void get_lenses(float ** lenses_x, float ** lenses_y, float ** lenses_m, cell ** tree, float delta, float ray_x, float ray_y){
+void get_lenses(float ** l_x, float ** l_y, float ** l_m, cell ** tree, float delta, float ray_x, float ray_y){
   int j, i, has_cells=0, has_lenses=0;
 
   /* finding the values of the current cell to decide if it is to be included in the calculation*/
@@ -74,36 +74,36 @@ void get_lenses(float ** lenses_x, float ** lenses_y, float ** lenses_m, cell **
     //lens_index += has_lenses;
     for(i=0; i<QUAD_IDX; i++){
       if((*tree)->lenses[i]){
-        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
-        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
-        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
+        (*l_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*l_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*l_m)[lens_index] = (*tree)->lenses[i]->m;
         lens_index++;
       }
-      if((*tree)->desc[i]) get_lenses(lenses_x, lenses_y, lenses_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
+      if((*tree)->desc[i]) get_lenses(l_x, l_y, l_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
     }
   }
   else if(has_lenses==1 && has_cells==0){
     for(i=0; i<QUAD_IDX; i++){
       if((*tree)->lenses[i]){
-        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
-        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
-        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
+        (*l_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*l_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*l_m)[lens_index] = (*tree)->lenses[i]->m;
       }
     }
     lens_index++;
     return;
   }
   else if(ratio<delta){
-    (*lenses_x)[lens_index] = cell_x;
-    (*lenses_y)[lens_index] = cell_y;
-    (*lenses_m)[lens_index] =(*tree)->total_mass;
+    (*l_x)[lens_index] = cell_x;
+    (*l_y)[lens_index] = cell_y;
+    (*l_m)[lens_index] =(*tree)->total_mass;
     lens_index++;
     return;
   }
   else{
     int i;
     for(i=0; i<QUAD_IDX; i++){
-      if((*tree)->desc[i]) get_lenses(lenses_x, lenses_y, lenses_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
+      if((*tree)->desc[i]) get_lenses(l_x, l_y, l_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
     }
   }
 }
@@ -116,7 +116,7 @@ __global__ void curand_setup(curandState* globalState, unsigned long seed){
 	curand_init(seed, id, 0, &globalState[id]);
 }
 
-__global__ void glensing(const float *lens_x, const float *lens_y, const float *lens_mass, const size_t nobjects, unsigned int* results, 
+__global__ void glensing(const float *d_l_x, const float *d_l_y, const float *d_l_mass, const size_t nobjects, unsigned int* results, 
 							const d_constants* v, curandState* globalState, long int seed) {
 	const unsigned int row = blockIdx.x*blockDim.x + threadIdx.x;
 	const unsigned int col = blockIdx.y*blockDim.y + threadIdx.y;
@@ -146,9 +146,9 @@ __global__ void glensing(const float *lens_x, const float *lens_y, const float *
 		dy = (1+v->gamma_)*start_y - v->kappa_c*start_y;
 	
 		for(k = 0; k < nobjects; ++k) {
-			float dist = pow(start_x - lens_x[lens_idx + k], 2) + pow(start_y - lens_y[lens_idx + k], 2);
-			dx -= lens_mass[lens_idx + k] * (start_x - lens_x[lens_idx + k]) / dist;
-			dy -= lens_mass[lens_idx + k] * (start_y - lens_y[lens_idx + k]) / dist;
+			float dist = pow(start_x - d_l_x[lens_idx + k], 2) + pow(start_y - d_l_y[lens_idx + k], 2);
+			dx -= d_l_mass[lens_idx + k] * (start_x - d_l_x[lens_idx + k]) / dist;
+			dy -= d_l_mass[lens_idx + k] * (start_y - d_l_y[lens_idx + k]) / dist;
 		}
 	
 		if ((dx >= -source_scale/2) && (dx <= source_scale/2) &&
