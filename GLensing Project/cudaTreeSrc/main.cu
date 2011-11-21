@@ -22,7 +22,7 @@ float *lens_y;
 float *lens_mass;
 size_t nobjects;
 cell *root; 	/* global pointer to root cell so we can get to it from anywhere */
-const float delta = 0.4;		/*variable to determine accuracy*/
+const float delta = 0.1;		/*variable to determine accuracy*/
 static int lens_index = 0;
 
 void init_var(vars *var) {
@@ -86,6 +86,29 @@ void get_lenses(float ** lenses_x, float ** lenses_y, float ** lenses_m, cell **
       }
     }
     lens_index++;
+    return;
+  }
+  else if(has_lenses>0 && has_cells==0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
+        lens_index++;
+      }
+    }
+    return;
+  }
+  else if(has_lenses>0 && has_cells>0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*lenses_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*lenses_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*lenses_m)[lens_index] = (*tree)->lenses[i]->m;
+        lens_index++;
+      }
+      if((*tree)->desc[i]) get_lenses(lenses_x, lenses_y, lenses_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
+    }
     return;
   }
   else if(ratio<delta){
@@ -164,6 +187,7 @@ int main(int argc, const char *argv[]){
   float temp_x = -image_scale_x + increment_x;
   float temp_y = image_scale_y - increment_y;
   get_lens_count(&root, delta, temp_x, temp_y, num_lenses);
+  printf("number of lenses: %d\n", *num_lenses);
   lenses_x = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
   lenses_y = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
   lenses_m = (float *)salloc(sizeof(float)*array_size*(*num_lenses));

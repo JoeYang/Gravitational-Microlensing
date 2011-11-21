@@ -36,7 +36,7 @@ void make_root(cell **root){
 */
 void get_lens_count(cell ** tree, float delta, float ray_x, float ray_y, int * lens_count){
   //static int val = 0;                 /* static variable to contain the number of lenses to include */
-  int j, has_cells=0, has_lenses=0;
+  int i, j, has_cells=0, has_lenses=0;
 
   /* finding the values of the current cell to decide if it is to be included in the calculation*/
   float cell_x = (float)(*tree)->center_mass_x/(float)(*tree)->total_mass;
@@ -52,13 +52,29 @@ void get_lens_count(cell ** tree, float delta, float ray_x, float ray_y, int * l
 
   if(delta == 0.0 && has_lenses>0){
     (*lens_count) += has_lenses;
-    int i;
     for(i=0; i<QUAD_IDX; i++){
       if((*tree)->desc[i]) get_lens_count(&((*tree)->desc[i]), delta, ray_x, ray_y, lens_count);
     }
   }
   else if(has_lenses==1 && has_cells==0){
     (*lens_count)++;
+    return;
+  }
+  else if(has_lenses>0 && has_cells==0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*lens_count)++;
+      }
+    }
+    return;
+  }
+  else if(has_lenses>0 && has_cells>0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*lens_count)++;
+      }
+      if((*tree)->desc[i]) get_lens_count(&((*tree)->desc[i]), delta, ray_x, ray_y, lens_count);
+    }
     return;
   }
   else if(ratio<delta){

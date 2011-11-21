@@ -63,6 +63,7 @@ void get_lenses(float ** l_x, float ** l_y, float ** l_m, cell ** tree, float de
   float cell_y = (float)(*tree)->center_mass_y/(float)(*tree)->total_mass;
   float dist = sqrt(pow(ray_x - cell_x,2) + pow(ray_y - cell_y, 2));
   float ratio = ((*tree)->width)/dist;
+  //printf("ratio: %.8f\n", ratio);
 
   // checking if the current cell has any cells or lenses
   for(j=0; j<QUAD_IDX; j++){
@@ -88,9 +89,32 @@ void get_lenses(float ** l_x, float ** l_y, float ** l_m, cell ** tree, float de
         (*l_x)[lens_index] = (*tree)->lenses[i]->x;
         (*l_y)[lens_index] = (*tree)->lenses[i]->y;
         (*l_m)[lens_index] = (*tree)->lenses[i]->m;
+        lens_index++;
       }
     }
-    lens_index++;
+    return;
+  }
+  else if(has_lenses>0 && has_cells==0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*l_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*l_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*l_m)[lens_index] = (*tree)->lenses[i]->m;
+        lens_index++;
+      }
+    }
+    return;
+  }
+  else if(has_lenses>0 && has_cells>0 && ratio>delta){
+    for(i=0; i<QUAD_IDX; i++){
+      if((*tree)->lenses[i]){
+        (*l_x)[lens_index] = (*tree)->lenses[i]->x;
+        (*l_y)[lens_index] = (*tree)->lenses[i]->y;
+        (*l_m)[lens_index] = (*tree)->lenses[i]->m;
+        lens_index++;
+      }
+      if((*tree)->desc[i]) get_lenses(l_x, l_y, l_m, &((*tree)->desc[i]), delta, ray_x, ray_y);
+    }
     return;
   }
   else if(ratio<delta){
@@ -208,6 +232,7 @@ int main(int argc, char** argv){
 	float temp_x = -image_scale_x + increment_x;
   	float temp_y = image_scale_y - increment_y;
  	get_lens_count(&root, delta, temp_x, temp_y, num_lenses);
+  printf("number of lenses: %d\n", *num_lenses);
   	lenses_x = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
   	lenses_y = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
   	lenses_m = (float *)salloc(sizeof(float)*array_size*(*num_lenses));
