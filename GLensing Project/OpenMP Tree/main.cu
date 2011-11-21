@@ -25,7 +25,7 @@ extern "C"{
 
 
 //number of rays per pixel
-#define RPP (16)
+#define RPP (512)
 #define	RPP_Kernel	(1)
 #define ITERATION	(RPP/(KERNEL_CALL_NUM*RPP_Kernel))
 
