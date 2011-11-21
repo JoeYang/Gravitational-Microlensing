@@ -266,8 +266,8 @@ int main(int argc, char** argv){
     	}
   	}
 	
-	printf("size of lenses_x is %d\n", sizeof(lenses_x));
-	printf("nobjects is %d\n", nobjects);
+	printf("size of lenses_x is %d\n", (int)sizeof(lenses_x));
+	printf("nobjects is %d\n", (int)nobjects);
 	printf("the size is %d\n", (*num_lenses)* GRID_SIZE * GRID_SIZE);
 	
 	int num_devices;

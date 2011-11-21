@@ -213,7 +213,7 @@ void add_lens(cell ** tree, lens **olens, lens **nlens, int pos){
 
 /*method to create Barnes-Hut tree*/
 void make_tree(cell ** tree, lens *lens){
-  int i, lens_pos;
+  int lens_pos;
   struct lens *temp = (struct lens *)salloc(sizeof(struct lens));                /*allocating memory to temp lens*/
   /* adding the properties of *lens to *temp */
   temp->x = lens->x;
