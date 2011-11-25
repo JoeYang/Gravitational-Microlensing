@@ -37,7 +37,7 @@ float *lens_y;
 float *lens_mass;
 size_t nobjects;
 cell *root; 	/* global pointer to root cell so we can get to it from anywhere */
-const float delta = 0.4;		/*variable to determine accuracy*/
+const float delta = 0.6;		/*variable to determine accuracy*/
 static int lens_index = 0;
 
 /*setting up some key parameters for the */
